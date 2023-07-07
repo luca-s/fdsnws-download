@@ -89,13 +89,13 @@ def main():
         #
         # get preferred origin from event (an events might contain multiple origins: e.g. different locators or
         # multiple updates for the same origin, we only care about the preferred one)
-        # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html#obspy.core.event.origin.Origin
+        # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html
         #
         o = ev_with_picks.preferred_origin()
 
         #
         # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
-        # https://docs.obspy.org/packages/autogen/obspy.core.event.magnitude.Magnitude.html#obspy.core.event.magnitude.Magnitude
+        # https://docs.obspy.org/packages/autogen/obspy.core.event.magnitude.Magnitude.html
         #
         m = ev_with_picks.preferred_magnitude()
         mag = -99  # default value in case magnitude is not computed for this event
@@ -108,12 +108,12 @@ def main():
         # loop trough origin arrivals
         #
         used_stations = set()
-        waveforms = Stream()
+        bulk = []
         for a in o.arrivals:
             #
             # find the pick associated with the current arrival
-            # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Arrival.html#obspy.core.event.origin.Arrival
-            # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Pick.html#obspy.core.event.origin.Pick
+            # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Arrival.html
+            # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Pick.html
             #
             for p in ev_with_picks.picks:
                 if p.resource_id == a.pick_id:
@@ -121,27 +121,32 @@ def main():
                     used_stations.add(wfid.network_code + "." + wfid.station_code +
                                       "." + (wfid.location_code if wfid.location_code else ""))
                     #
-                    # Download the waveform relative to the pick time
-                    # https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html
+                    # Keep track of the pick waveform to download
                     #
                     if include_wf:
-                        try:
-                            timewin = 10.000  # [sec] how much waveform to download
-                            starttime = p.time-timewin/2
-                            endtime = p.time+timewin/2
-                            st = client.get_waveforms(
-                                wfid.network_code, wfid.station_code, wfid.location_code, wfid.channel_code, starttime=starttime, endtime=endtime)
-                            waveforms.extend(st)
-                        except Exception as e:
-                            print(
-                                f"Cannot load trace {wfid.network_code}.{wfid.station_code}.{wfid.location_code}.{wfid.channel_code} {starttime}-{endtime}: {e}", file=sys.stderr)
+                        extratime = 1.0  # [sec] how much waveform to download after the pick
+                        starttime = o.time
+                        endtime = p.time+extratime
+                        bulk.append( (wfid.network_code, wfid.station_code, wfid.location_code, wfid.channel_code, starttime, endtime) )
                     break
 
         #
-        # Here it is possible to filter the catalog by certain criteria:
+        # Download the waveforms
         #
-        # example of filtering: len(o.arrivals) > 8 and len(used_stations) > 4 and o.quality.azimuthal_gap < 180 and mag > 2.0
-        if True:
+        waveforms = None
+        if bulk:
+            try:
+                # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.get_waveforms_bulk.html
+                # https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html
+                waveforms = client.get_waveforms_bulk(bulk)
+            except Exception as e:
+                print(f"Cannot fetch waveforms for event {id}: {e}", file=sys.stderr)
+        #
+        # Here it is possible to filter the catalog by certain criteria:
+        # See also:
+        #    https://docs.obspy.org/packages/autogen/obspy.core.event.origin.OriginQuality.html
+        #
+        if True:  # example of filtering: len(o.arrivals) > 8 and len(used_stations) > 4 and o.quality.azimuthal_gap < 180 and mag > 2.0 
 
             #
             # Write csv entry for this event
@@ -155,9 +160,8 @@ def main():
                 cat_out = Catalog()
                 cat_out.append(ev)
                 cat_out.write(Path(catdir, f"ev{id}.xml"), format="QUAKEML")
-                if waveforms:
-                    waveforms.write(
-                        Path(catdir, f"ev{id}.mseed"), format="MSEED")
+                if waveforms is not None:
+                    waveforms.write(Path(catdir, f"ev{id}.mseed"), format="MSEED")
 
 
 if __name__ == '__main__':
