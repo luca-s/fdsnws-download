@@ -64,7 +64,7 @@ def main():
                           includeallmagnitudes=False)
 
   # csv file header
-  print("id,time,latitude,longitude,depth,mag,mag_plot_size,rms,az_gap,num_phase,num_station")
+  print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,rms,az_gap,num_phase,num_station")
 
   #
   # Loop through the catalog and extract the information we need
@@ -101,9 +101,11 @@ def main():
     #
     m = ev_with_picks.preferred_magnitude()
     mag = -99  # default value in case magnitude is not computed for this event
+    mag_type = "?"
     mag_size = 0  # convert magnitude to a size that can be used for plotting
     if m is not None:
       mag = m.mag
+      mag_type = m.magnitude_type
       mag_size = magToSize(15, mag)
 
     #
@@ -153,7 +155,7 @@ def main():
       #
       # Write csv entry for this event
       #
-      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag},{mag_size},{o.quality.standard_error},{o.quality.azimuthal_gap},{len(o.arrivals)},{len(used_stations)}")
+      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},{o.quality.standard_error},{o.quality.azimuthal_gap},{len(o.arrivals)},{len(used_stations)}")
 
       #
       # Write extended event information as xml and waveform data
