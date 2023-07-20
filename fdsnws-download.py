@@ -10,12 +10,9 @@ from obspy.core.stream import Stream
 
 
 def magToSize(scaler, mag):
-  # [Pa] stress drop assumption, could also be higher than 1MPa, but go for that for nowâ€¦
-  sigma = 1e6
-  # [Nm] Scalar seismic moment from magnitude (Kanamori)
-  M0 = 10**((mag + 6.03)*3/2)
-  # [m]  Source radii from seismic moment and stress drop (Keilis-Borok, 1959)
-  SR = (M0 * 7/16 * 1/sigma)**(1/3)
+  sigma = 1e6 # [Pa] stress drop assumption, could also be higher than 1MPa
+  M0 = 10**((mag + 6.03)*3/2) # [Nm] Scalar seismic moment from magnitude (Kanamori)
+  SR = (M0 * 7/16 * 1/sigma)**(1/3) # [m]  Source radii from seismic moment and stress drop (Keilis-Borok, 1959)
   return SR * scaler  # scale the physical unit by something sensible for the plot
 
 
@@ -64,7 +61,7 @@ def main():
                           includeallmagnitudes=False)
 
   # csv file header
-  print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,rms,az_gap,num_phase,num_station")
+  print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase,num_station")
 
   #
   # Loop through the catalog and extract the information we need
@@ -94,6 +91,12 @@ def main():
     # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html
     #
     o = ev_with_picks.preferred_origin()
+
+    #
+    # filter out non manual events ?
+    #
+    #if o.evaluation_mode != "manual":
+    #    continue
 
     #
     # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
@@ -155,7 +158,7 @@ def main():
       #
       # Write csv entry for this event
       #
-      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},{o.quality.standard_error},{o.quality.azimuthal_gap},{len(o.arrivals)},{len(used_stations)}")
+      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},{o.method_id},{o.evaluation_mode},{o.creation_info.author},{o.quality.standard_error},{o.quality.azimuthal_gap},{len(o.arrivals)},{len(used_stations)}")
 
       #
       # Write extended event information as xml and waveform data
