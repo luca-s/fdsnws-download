@@ -47,7 +47,9 @@ def main():
   # https://docs.obspy.org/packages/autogen/obspy.core.inventory.inventory.Inventory.html
   #
   if catdir:
-    inventory = client.get_stations(network="*", station="*",  starttime=starttime,  endtime=endtime)
+    inventory = client.get_stations(network="*", station="*", location="*", channel="*",
+                                    starttime=starttime,  endtime=endtime,
+                                    level="channel")
     inventory.write(Path(catdir, "inventory.xml"), format="STATIONXML")
 
   #
