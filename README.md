@@ -2,6 +2,8 @@
 
 A customizable example script on how to use a FDSN Web Service programmatically with obspy to download an earthquake catalog.
 
+First of all edit the script and set the FDSNWS URL you want (`Client(base_url="http://myfdsnws.somewhere:8080")`).
+
 The script can be run like this (download events between the passed dates and store it to catalog.csv):
 
 <pre>
