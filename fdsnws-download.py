@@ -93,6 +93,9 @@ def main():
     # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html
     #
     o = ev_with_picks.preferred_origin()
+    if o is None:
+        print(f"No preferred origin for event {ev_id}", file=sys.stderr)
+        continue
 
     #
     # filter out non manual events ?
