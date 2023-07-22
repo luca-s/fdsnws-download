@@ -6,25 +6,25 @@ A customizable example script on how to use a FDSN Web Service programmatically 
 
 **First of all edit the script and set the FDSNWS URL you want**.
 
-The script can be run like this (download events between the passed dates and store it to catalog.csv):
+To download the events between the passed dates and store them in **csv format** to catalog.csv, run the following:
 
 <pre>
 $ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" \
-  > catalog.csv
+    > catalog.csv
 </pre>
 
-While a csv file is easy to handle, some details cannot be stored in that format (e.g. the picks). For this reason it is possible to specify a **destination folder** where each **event** is stored **in QUAKEML** (that file can later be loaded with obspy to gain full event information):
+While a csv file is easy to handle, some details cannot be stored in that format (e.g. the picks). For this reason it is possible to specify a **destination folder** where each **event** is stored **in QUAKEML** and the inventory is stored too (these files can later be loaded with obspy):
 
 <pre>
 $ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" \
-  output-catalog-folder > catalog.csv
+    output-catalog-dir > catalog.csv
 </pre>
 
-Finally It is possible to **download the waveforms** too. That will be slow though, so fetching the catalog without waveforms first is recommended:
+Finally It is possible to **download the waveforms** too. The command use the previously downloaded catalog data (csv and Quake XML files) and will download the waveforms for each event:
 
 <pre>
-$ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" \
-  output-catalog-folder --waveforms > catalog.csv
+$ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" --waveforms \
+  catalog-dir catalog.csv
 </pre>
 
 ## Using the downloaded data
