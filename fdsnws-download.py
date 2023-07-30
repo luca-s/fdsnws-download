@@ -30,10 +30,13 @@ def main():
   endtime = UTCDateTime(sys.argv[2])
 
   #
-  # Create a client that connects to a FDSN Web Service
+  # Define a client that connects to a FDSN Web Service
   # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.html
   #
-  client = Client(base_url="http://myfdsnws.somewhere:8080") #, user="user", password="pass") optional
+  client = Client('ClientName') # When using a client  without credentials 
+  #client = Client(base_url="http://myfdsnws.somewhere:8080", user="user", password="pass") # When using password protected clients
+  #client = Client(base_url="http://myfdsnws.somewhere:8080" ) # When using custom client without credentials
+
 
   if len(sys.argv) == 3:
     download_catalog(client, None, starttime, endtime)
@@ -51,7 +54,7 @@ def main():
 def download_catalog(client, catdir, starttime, endtime):
 
   if catdir:
-    # make out folder if it doesn't exitst
+    # create folder if it doesn't exist
     Path(catdir).mkdir(parents=True, exist_ok=True)
 
   #
