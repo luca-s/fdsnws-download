@@ -52,7 +52,7 @@ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" \
 
 # Post-processing
 
-Here we demonstrate how to use the csv catalog and the events stored in QUAKEML format. In this example each event is loaded and the corresponding arrivals are printed.
+Here we demonstrate how to use the csv catalog and the events stored in QUAKEML format. In this example each event is loaded and the corresponding arrivals are printed. The waveforms are loaded too and plotted.
 
 ```python
 import pandas as pd
@@ -67,35 +67,43 @@ cat = pd.read_csv(csv_catalog, dtype=str, na_filter=False)
 
 #Loop through the catalog by event
 for row in cat.itertuples():
+  #
+  # you can fetch any csv column with 'row.column'
+  #
+  print(f"Processing event {row.id}")
+
+  #
+  # We want to access all event information, so we load its XML file
+  # with obspy
+  #
+  cat = ob.core.event.read_events( Path(xml_folder, f"ev{row.id}.xml"))
+  ev= cat[0] # we know we stored only one event in this catalog
+
+  #
+  # We can now have access to all events information e.g. access picks
+  #
+
+  # get preferred origin
+  o = ev.preferred_origin()
+  print(f"Origin {o.longitude} {o.latitude} {o.depth} {o.time}")
+
+  # loop trough origin arrivals
+  for a in o.arrivals:
     #
-	# you can fetch any csv column with 'row.column'
-	#
-	print(f"Processing event {row.id}")
+    # find the pick associated with the current arrival
+    #
+    for p in ev.picks:
+      if p.resource_id == a.pick_id:
+        wfid = p.waveform_id
+        print(f"Found pick {p.time} @ {wfid.network_code}.{wfid.station_code}.{wfid.location_code}.{wfid.channel_code}")
+        break
 
-	#
-	# We want to access all event information, so we load its XML file
-	# with obspy
-	#
-	cat = ob.core.event.read_events( Path(xml_folder, f"ev{row.id}.xml"))
-	ev= cat[0] # we know we stored only one event in this catalog
+  #
+  # We can also load the waveforms for this event
+  #
+  trace = ob.read( Path(xml_folder, f"ev{row.id}.mseed"))
+  trace.plot()
 
-	#
-	# We can now have access to all events information e.g.
-	#
-
-	# get preferred origin
-	o = ev.preferred_origin()
-	print(f"Origin {o.longitude} {o.latitude} {o.depth} {o.time}")
-
-	# loop trough origin arrivals
-	for a in o.arrivals:
-  	# find the pick associated with the current arrival
-  		for p in ev:
-    		if p.resource_id == a.pick_id:
-      			wfid = p.waveform_id
-      			print(f"Found pick {p.time} @ {wfid.network_code}.{wfid.station_code}.{wfid.location_code}.{wfid.channel_code}")
-      			break
- 
 ```
 
 Similarly it is possible to load the inventory XML with obspy and use the [Inventory class](https://docs.obspy.org/packages/autogen/obspy.core.inventory.inventory.Inventory.html) to fetch the required information.
