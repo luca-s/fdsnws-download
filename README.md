@@ -44,11 +44,18 @@ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" \
  It is possible to **download the waveforms** too. The script uses the previously downloaded catalog data (csv and QUAKEML files) and will download the waveforms for each event:
 
 <pre>
- python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" --waveforms \
-  catalog-dir > catalog.csv
+ python fdsnws-download.py --waveforms catalog-dir catalog.csv
 </pre>
 
-*Note*: Replace **output-catalog-dir**  with a folder name that makes sense to you. 
+Or, if you want to specify the lenght [sec] of the waveforms to download:
+
+<pre>
+ python fdsnws-download.py --waveforms catalog-dir catalog.csv 1.5
+</pre>
+
+*Note*: Replace **catalog-dir** and **catalog.csv** with the folder name and the csv file downloaded previously.
+
+By default only the 
 
 # Post-processing
 

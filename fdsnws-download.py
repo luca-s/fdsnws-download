@@ -23,11 +23,8 @@ def main():
     print("Usage:")
     print(f" {sys.argv[0]} start-date end-date")
     print(f" {sys.argv[0]} start-date end-date output-catalog-dir")
-    print(f" {sys.argv[0]} start-date end-date --waveforms catalog-dir catalog.csv")
+    print(f" {sys.argv[0]} --waveforms catalog-dir catalog.csv [wf-length]")
     sys.exit(0)
-
-  starttime = UTCDateTime(sys.argv[1])
-  endtime = UTCDateTime(sys.argv[2])
 
   #
   # Define a client that connects to a FDSN Web Service
@@ -38,15 +35,20 @@ def main():
   #client = Client(base_url="http://myfdsnws.somewhere:8080" ) # When using custom client without credentials
 
 
-  if len(sys.argv) == 3:
-    download_catalog(client, None, starttime, endtime)
-  elif len(sys.argv) == 4 and sys.argv[3] != "--waveforms":
-    catdir = sys.argv[3]
+  if sys.argv[1] == "--waveforms" and len(sys.argv) >= 4:
+    catdir = sys.argv[2]
+    catfile = sys.argv[3]
+    wflength = None
+    if len(sys.argv) >= 5:
+      wflength = float(sys.argv[4])  # [sec] how much waveform to download
+    download_waveform(client, catdir, catfile, wflength)
+  elif len(sys.argv) == 3 or len(sys.argv) == 4:
+    starttime = UTCDateTime(sys.argv[1])
+    endtime = UTCDateTime(sys.argv[2])
+    catdir = None
+    if len(sys.argv) == 4:
+      catdir = sys.argv[3]
     download_catalog(client, catdir, starttime, endtime)
-  elif len(sys.argv) == 6 and sys.argv[3] == "--waveforms":
-    catdir = sys.argv[4]
-    catfile = sys.argv[5]
-    download_waveform(client, catdir, catfile)
   else:
     print("Wrong syntax", file=sys.stderr)
 
@@ -167,7 +169,7 @@ def download_catalog(client, catdir, starttime, endtime):
         cat_out.write(Path(catdir, f"ev{id}.xml"), format="QUAKEML")
 
 
-def download_waveform(client, catdir, catfile):
+def download_waveform(client, catdir, catfile, wflength=None):
   #
   # Load the csv catalog
   #
@@ -212,6 +214,7 @@ def download_waveform(client, catdir, catfile):
     # loop trough origin arrivals
     #
     bulk = []
+    last_pick_time = None
     for a in o.arrivals:
       #
       # find the pick associated with the current arrival
@@ -222,11 +225,24 @@ def download_waveform(client, catdir, catfile):
           #
           # Keep track of the pick waveform to download
           #
-          extratime = 1.0  # [sec] how much waveform to download after the pick
-          starttime = o.time
-          endtime = p.time+extratime
-          bulk.append( (wfid.network_code, wfid.station_code, wfid.location_code, wfid.channel_code, starttime, endtime) )
+          bulk.append( (wfid.network_code, wfid.station_code, wfid.location_code, wfid.channel_code, p.time, p.time) )
+          if last_pick_time is None or p.time > last_pick_time:
+              last_pick_time = p.time
           break
+
+    #
+    # Now that we know the last pick time we can fix the time window for all waveforms
+    #
+    starttime = o.time
+    if wflength is None:
+      endtime = last_pick_time
+      endtime += (endtime - starttime) * 0.1 # add extra 10% 
+    else:
+      endtime = starttime + wflength
+
+    for i in range(len(bulk)):
+      network_code, station_code, location_code, channel_code, _, _ = bulk[i]
+      bulk[i] = (network_code, station_code, location_code, channel_code, starttime, endtime)
 
     #
     # Download the waveforms
@@ -242,7 +258,7 @@ def download_waveform(client, catdir, catfile):
         print(f"Cannot fetch waveforms for event {id}: {e}", file=sys.stderr)
 
     if waveforms:
-      waveforms.trim(starttime=o.time)
+      waveforms.trim(starttime=starttime, endtime=endtime)
       print(f"Saving {dest}", file=sys.stderr)
       waveforms.write(dest, format="MSEED")
 
