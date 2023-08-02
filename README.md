@@ -41,7 +41,7 @@ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" \
 
 ## Waveform data
 
- It is possible to **download the waveforms** too. The script uses the previously downloaded catalog data (csv and QUAKEML files) and will download the waveforms for each event:
+ It is possible to **download the waveforms** too. The script uses the previously downloaded catalog data (csv and QUAKEML files) and will download the waveforms for each event (using the interval: event time ~ latest pick):
 
 <pre>
  python fdsnws-download.py --waveforms catalog-dir catalog.csv
@@ -54,8 +54,6 @@ Or, if you want to specify the lenght [sec] of the waveforms to download:
 </pre>
 
 *Note*: Replace **catalog-dir** and **catalog.csv** with the folder name and the csv file downloaded previously.
-
-By default only the 
 
 # Post-processing
 
@@ -72,18 +70,32 @@ xml_folder  = "mydirectory"  # folder where the event XML files were downloaded
 ### Load the csv catalog
 cat = pd.read_csv(csv_catalog, dtype=str, na_filter=False)
 
-#Loop through the catalog by event
+#
+# One interesting thing of using pandas to read the csv file is that you can
+# now filter the events as you please, e.g.
+#
+#   cat = cat[ cat["evaluation_mode"] == "manual" ] # select only manual events
+#
+#   cat = cat[ cat["num_phase"] >= 8 ] # at least 8 picks
+#
+#   cat = cat[ cat["depth"] > -1400 & cat["depth"] < -1200 ] # events between 1200~1400 meters
+#
+
+#
+# Loop through the catalog by event
+#
 for row in cat.itertuples():
   #
   # you can fetch any csv column with 'row.column'
   #
-  print(f"Processing event {row.id}")
+  ev_id = row.id
+  print(f"Processing event {ev_id}")
 
   #
   # We want to access all event information, so we load its XML file
   # with obspy
   #
-  cat = ob.core.event.read_events( Path(xml_folder, f"ev{row.id}.xml"))
+  cat = ob.core.event.read_events( Path(xml_folder, f"ev{ev_id}.xml"))
   ev= cat[0] # we know we stored only one event in this catalog
 
   #
@@ -108,7 +120,7 @@ for row in cat.itertuples():
   #
   # We can also load the waveforms for this event
   #
-  trace = ob.read( Path(xml_folder, f"ev{row.id}.mseed"))
+  trace = ob.read( Path(xml_folder, f"ev{ev_id}.mseed"))
   trace.plot()
 
 ```
