@@ -129,9 +129,35 @@ Similarly it is possible to load the inventory XML with obspy and use the [Inven
 
 ```python
 import obspy as ob
+from pathlib import Path
 
-inv = ob.core.inventory.inventory.read_inventory("inventory.xml")
-print(inv.get_contents())
+xml_folder  = "mydirectory"  # folder where the event XML files were downloaded
+
+### Load the previously downloaded inventory
+inv = ob.core.inventory.inventory.read_inventory( Path(xml_folder, "inventory.xml") )
+
+### Print the stations active at a specific point in time
+ref_time = ob.UTCDateTime("2022-10-01 12:00:00")
+
+stations = {}
+for net in inv.networks:
+    if ref_time < net.start_date or ref_time > net.end_date:
+        continue
+    for sta in net.stations:
+        if ref_time < sta.start_date or ref_time > sta.end_date:
+            continue
+        for cha in sta.channels:
+            if ref_time < cha.start_date or ref_time > cha.end_date:
+                continue
+            wfid = f"{net.code}.{sta.code}.{cha.location_code}.{cha.code}"
+            stations[wfid] = (cha.latitude, cha.longitude, cha.elevation, cha.azimuth, cha.dip, cha.sample_rate, cha.description, cha.comments)
+
+for (sta, info) in stations.items():
+    print(f"{sta}: {info}")
+
+#
+# sometimes it might be easier to fetch the coordinates like this
+#
 inv.get_coordinates("NET.STA.LOC.CHA", ob.UTCDateTime("2022-10-01"))
 ```
 

@@ -10,6 +10,10 @@ from obspy.core.event import Catalog
 from obspy.core.stream import Stream
 
 
+#
+# utility function to transform magnitude to a phisical size, so that it can
+# be used as the size of an event when plotting it
+#
 def magToSize(scaler, mag):
   sigma = 1e6 # [Pa] stress drop assumption, could also be higher than 1MPa
   M0 = 10**((mag + 6.03)*3/2) # [Nm] Scalar seismic moment from magnitude (Kanamori)
@@ -66,7 +70,7 @@ def download_catalog(client, catdir, starttime, endtime):
   if catdir:
     inventory = client.get_stations(network="*", station="*", location="*", channel="*",
                                     starttime=starttime,  endtime=endtime,
-                                    level="channel")
+                                    level="response")
     inventory.write(Path(catdir, "inventory.xml"), format="STATIONXML")
 
   #
