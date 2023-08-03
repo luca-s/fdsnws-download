@@ -15,7 +15,7 @@ A customizable script to acquire data [waveforms, earthquake catalogs, phase pic
 
 The [script](https://github.com/mmesim/fdsnws-download/blob/main/fdsnws-download.py) is structured in a way that it is highly customizable in order to provide maximum flexibility to the user. 
 
-**Define Client**: The first important step is to define the [Client](https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.html) from which the data will be requested. In lines 33-38 the user can define either a Client from the Obspy list [e.g. ETH], or alternatively provide a password protected FDSN web service or a custom FDSN web service that doesn't require credentials. 
+**Define Client**: The first important step is to define the [Client](https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.html) from which the data will be requested. In the **main()** method the user can define either a Client from the Obspy list [e.g. ETH], or alternatively provide a password protected FDSN web service or a custom FDSN web service that doesn't require credentials.
 
 **Other parameters**: In the different functions the user can define criteria to filter the earthquake catalog, and to define the window length of the requested waveforms (*extratime*). The format type of the data is also flexible and can be defined in the script (e.g **SAC** instead of **MSEED**). 
 
@@ -41,19 +41,23 @@ python fdsnws-download.py "2023-04-19T12:00:00" "2023-04-19T12:03:00" \
 
 ## Waveform data
 
- It is possible to **download the waveforms** too. The script uses the previously downloaded catalog data (csv and QUAKEML files) and will download the waveforms for each event (using the interval: event time ~ latest pick):
+ It is possible to **download the waveforms** too. The script loads the previously downloaded catalog data (csv and QUAKEML files) and then it downloads the waveforms for each event. By default it fetches the waveforms of the stations associated to the event picks and the latest pick time is used to determine the waveform length (oring time ~ latest pick time):
 
 <pre>
  python fdsnws-download.py --waveforms catalog-dir catalog.csv
 </pre>
 
-Or, if you want to specify the lenght [sec] of the waveforms to download:
+*Note*: Replace **catalog-dir** and **catalog.csv** with the folder name and the csv file downloaded previously.
+
+Additionally it is possible to manually specify the length of the waveforms to download and the list of stations to use:
 
 <pre>
- python fdsnws-download.py --waveforms catalog-dir catalog.csv 1.5
+ python fdsnws-download.py --waveforms catalog-dir catalog.csv [length] [stations_list]
 </pre>
 
-*Note*: Replace **catalog-dir** and **catalog.csv** with the folder name and the csv file downloaded previously.
+*Note*:
+- **length** is in seconds **e.g.** 3.5, 0.030
+- **stations_list** is a comma separated list of station filters where each filter can be: "net", "net.sta", "net.sta.loc" or "net.sta.loc.cha" and it supports wildcards such as *,?,(,),| **e.g.** "CH,GR.(STA01|STA02).\*.HH?" - download all stations of the network CH (identical to CH.\*.\*.\*) plus the stations GT.STA01.\*.HH? and GT.STA02.\*.HH?
 
 # Post-processing
 

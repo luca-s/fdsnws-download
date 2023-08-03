@@ -20,11 +20,16 @@ from pathlib import Path
 class StationNameFilter:
 
     def __init__(self):
-        self.rules = []
+        self.rules = {}
 
     def set_rules(self, rules):
-        self.rules = []
+        self.rules = {}
+        return self.add_rules(rules)
+
+    def add_rules(self, rules):
+        #
         # split multiple comma separated rules
+        #
         for singleRule in rules.split(","):
             # split the rule in NET STA LOC CHA
             tokens = singleRule.split(".")
@@ -43,7 +48,6 @@ class StationNameFilter:
                 print(f"Error: check station filter syntax ({rules})",
                         file=sys.stderr)
                 return False
-
             #
             # Check for valid characters
             #
@@ -54,28 +58,27 @@ class StationNameFilter:
                           file=sys.stderr)
                   return False
 
-            singleRule = f"{tokens[0]}.{tokens[1]}.{tokens[2]}.{tokens[3]}"
-
+            fullRule = f"{tokens[0]}.{tokens[1]}.{tokens[2]}.{tokens[3]}"
             #
             # convert user special characters (* ? .) to regex equivalent
             #
-            singleRule = re.sub(r"\.", r"\.", singleRule)  # . becomes \.
-            singleRule = re.sub(r"\?", ".", singleRule)    # ? becomes .
-            singleRule = re.sub(r"\*", ".*", singleRule)   # * becomes .*
-            singleRule = re.compile(singleRule)
+            reRule = re.sub(r"\.", r"\.", fullRule)  # . becomes \.
+            reRule = re.sub(r"\?", ".",   reRule)    # ? becomes .
+            reRule = re.sub(r"\*", ".*",  reRule)   # * becomes .*
+            reRule = re.compile(reRule)
 
-            self.rules.append(singleRule)
+            self.rules[fullRule] = reRule
         return True
 
     def match(self, waveform_id):
-        for rule in self.rules:
-            if rule.fullmatch(waveform_id) is not None:
+        for (fullRule, reRule) in self.rules.items():
+            if reRule.fullmatch(waveform_id) is not None:
                 return True
         return False
 
     def print(self):
-        for rule in self.rules:
-            print(rule.pattern)
+        for (fullRule, reRule) in self.rules.items():
+            print(f"{fullRule} (regular expression: {reRule.pattern})")
 
 
 #
@@ -320,10 +323,10 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
 
     #
     # loop trough origin arrivals to find the used stations and the
-    # last pick time
+    # latest pick time
     #
-    stations = []
     last_pick_time = None
+    auto_sta_filters = StationNameFilter()
     for a in o.arrivals:
       #
       # find the pick associated with the current arrival
@@ -336,18 +339,20 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
           if last_pick_time is None or p.time > last_pick_time:
               last_pick_time = p.time
           #
-          # Keep track of the pick waveform to download
+          # Keep track of the stations used by the picks
           #
           wfid = p.waveform_id
-          stations.append( (wfid.network_code, wfid.station_code, wfid.location_code, wfid.channel_code) )
+          auto_sta_filters.add_rules(
+            f"{wfid.network_code}.{wfid.station_code}.{wfid.location_code if wfid.location_code else ''}.{wfid.channel_code}"
+          )
           break
-
     #
-    # If user requested specific stations, discard origin stations and
-    # find the stations that were active at this event time
+    # Find the stations list that were active at this event time
     #
-    if sta_filters:
-        stations = get_stations(inventory=inv, ref_time=o.time, sta_filters=sta_filters)
+    stations = get_stations(
+      inventory=inv, ref_time=o.time,
+      sta_filters=(auto_sta_filters if sta_filters is None else sta_filters)
+    )
 
     #
     # Now that we know the last pick time we can fix the time window for all waveforms
