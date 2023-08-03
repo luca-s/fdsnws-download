@@ -1,17 +1,105 @@
 #!/usr/bin/env python3
 
 import sys
-from pathlib import Path
+import re
 import pandas as pd
 import obspy as ob
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
 from obspy.core.event import Catalog
 from obspy.core.stream import Stream
+from pathlib import Path
 
 
 #
-# utility function to transform magnitude to a phisical size, so that it can
+# Class to parse and verify a station filter. A station filter is
+# something in the form:
+#   net, net.sta, net.sta.loc, net.sta.loc.cha
+# Each of net,sta,loc,cha supports wildcards such as *,?,(,),|
+#
+class StationNameFilter:
+
+    def __init__(self):
+        self.rules = []
+
+    def set_rules(self, rules):
+        self.rules = []
+        # split multiple comma separated rules
+        for singleRule in rules.split(","):
+            # split the rule in NET STA LOC CHA
+            tokens = singleRule.split(".")
+            if len(tokens) == 1: # only network
+                tokens.append("*")
+                tokens.append("*")
+                tokens.append("*")
+            elif len(tokens) == 2: # only network.station
+                tokens.append("*")
+                tokens.append("*")
+            elif len(tokens) == 3: # only network.station.location
+                tokens.append("*")
+            elif len(tokens) == 4: # all network.station.location.channel
+                pass
+            else:
+                print(f"Error: check station filter syntax ({rules})",
+                        file=sys.stderr)
+                return False
+
+            #
+            # Check for valid characters
+            #
+            valid_str = re.compile("[A-Z|a-z|0-9|\?|\*|\||\(|\)]*")
+            for tok in tokens:
+                if valid_str.fullmatch(tok) is None:
+                  print(f"Error: check station filter syntax ({rules})",
+                          file=sys.stderr)
+                  return False
+
+            singleRule = f"{tokens[0]}.{tokens[1]}.{tokens[2]}.{tokens[3]}"
+
+            #
+            # convert user special characters (* ? .) to regex equivalent
+            #
+            singleRule = re.sub(r"\.", r"\.", singleRule)  # . becomes \.
+            singleRule = re.sub(r"\?", ".", singleRule)    # ? becomes .
+            singleRule = re.sub(r"\*", ".*", singleRule)   # * becomes .*
+            singleRule = re.compile(singleRule)
+
+            self.rules.append(singleRule)
+        return True
+
+    def match(self, waveform_id):
+        for rule in self.rules:
+            if rule.fullmatch(waveform_id) is not None:
+                return True
+        return False
+
+    def print(self):
+        for rule in self.rules:
+            print(rule.pattern)
+
+
+#
+# Utility function that returns the stations active at a specific point in time
+#
+def get_stations(inventory, ref_time, sta_filters):
+    stations = []
+    for net in inventory.networks:
+        if ref_time < net.start_date or ref_time > net.end_date:
+            continue
+        for sta in net.stations:
+            if ref_time < sta.start_date or ref_time > sta.end_date:
+                continue
+            for cha in sta.channels:
+                if ref_time < cha.start_date or ref_time > cha.end_date:
+                    continue
+                wfid = f"{net.code}.{sta.code}.{cha.location_code}.{cha.code}"
+                if sta_filters.match(wfid):
+                    stations.append( (net.code, sta.code, cha.location_code, cha.code) )
+    return stations
+
+
+#
+# Utility function that transforms magnitude to a phisical size, so that it can
 # be used as the size of an event when plotting it
 #
 def magToSize(scaler, mag):
@@ -27,7 +115,7 @@ def main():
     print("Usage:")
     print(f" {sys.argv[0]} start-date end-date")
     print(f" {sys.argv[0]} start-date end-date output-catalog-dir")
-    print(f" {sys.argv[0]} --waveforms catalog-dir catalog.csv [wf-length]")
+    print(f" {sys.argv[0]} --waveforms catalog-dir catalog.csv [wf-length] [wf-filter]")
     sys.exit(0)
 
   #
@@ -45,7 +133,12 @@ def main():
     wflength = None
     if len(sys.argv) >= 5:
       wflength = float(sys.argv[4])  # [sec] how much waveform to download
-    download_waveform(client, catdir, catfile, wflength)
+    sta_filters = None
+    if len(sys.argv) >= 6:
+      sta_filters = StationNameFilter()
+      if not sta_filters.set_rules(sys.argv[5]):
+          return
+    download_waveform(client, catdir, catfile, wflength, sta_filters)
   elif len(sys.argv) == 3 or len(sys.argv) == 4:
     starttime = UTCDateTime(sys.argv[1])
     endtime = UTCDateTime(sys.argv[2])
@@ -173,12 +266,23 @@ def download_catalog(client, catdir, starttime, endtime):
         cat_out.write(Path(catdir, f"ev{id}.xml"), format="QUAKEML")
 
 
-def download_waveform(client, catdir, catfile, wflength=None):
+def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
   #
   # Load the csv catalog
   #
+  print(f"Loading catalog {catfile}...", file=sys.stderr)
   cat = pd.read_csv(catfile, dtype=str, na_filter=False)
-  print(f"Loaded catalog {catfile}: found {len(cat)} events", file=sys.stderr)
+  print(f"Found {len(cat)} events", file=sys.stderr)
+
+  #
+  # Load the inventory
+  #
+  print(f"Loading inventory {Path(catdir, 'inventory.xml')}...", file=sys.stderr)
+  inv = ob.core.inventory.inventory.read_inventory( Path(catdir, "inventory.xml") )
+
+  if sta_filters:
+    print(f"Using the following station filters...", file=sys.stderr)
+    sta_filters.print()
 
   #
   # Loop through the catalog by event
@@ -215,9 +319,10 @@ def download_waveform(client, catdir, catfile, wflength=None):
         continue
 
     #
-    # loop trough origin arrivals
+    # loop trough origin arrivals to find the used stations and the
+    # last pick time
     #
-    bulk = []
+    stations = []
     last_pick_time = None
     for a in o.arrivals:
       #
@@ -225,14 +330,24 @@ def download_waveform(client, catdir, catfile, wflength=None):
       #
       for p in ev.picks:
         if p.resource_id == a.pick_id:
-          wfid = p.waveform_id
+          #
+          # Keep track of the last pick time
+          #
+          if last_pick_time is None or p.time > last_pick_time:
+              last_pick_time = p.time
           #
           # Keep track of the pick waveform to download
           #
-          bulk.append( (wfid.network_code, wfid.station_code, wfid.location_code, wfid.channel_code, p.time, p.time) )
-          if last_pick_time is None or p.time > last_pick_time:
-              last_pick_time = p.time
+          wfid = p.waveform_id
+          stations.append( (wfid.network_code, wfid.station_code, wfid.location_code, wfid.channel_code) )
           break
+
+    #
+    # If user requested specific stations, discard origin stations and
+    # find the stations that were active at this event time
+    #
+    if sta_filters:
+        stations = get_stations(inventory=inv, ref_time=o.time, sta_filters=sta_filters)
 
     #
     # Now that we know the last pick time we can fix the time window for all waveforms
@@ -240,13 +355,13 @@ def download_waveform(client, catdir, catfile, wflength=None):
     starttime = o.time
     if wflength is None:
       endtime = last_pick_time
-      endtime += (endtime - starttime) * 0.1 # add extra 10% 
+      endtime += (endtime - starttime) * 0.3 # add extra 30% 
     else:
-      endtime = starttime + wflength
+      endtime = starttime + wflength # set user defined length
 
-    for i in range(len(bulk)):
-      network_code, station_code, location_code, channel_code, _, _ = bulk[i]
-      bulk[i] = (network_code, station_code, location_code, channel_code, starttime, endtime)
+    bulk = []
+    for (network_code, station_code, location_code, channel_code) in stations:
+      bulk.append( (network_code, station_code, location_code, channel_code, starttime, endtime) )
 
     #
     # Download the waveforms
