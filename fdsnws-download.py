@@ -258,7 +258,7 @@ def download_catalog(client, catdir, starttime, endtime):
     if True:  # example of filtering: len(o.arrivals) > 8 and len(used_stations) > 4 and o.quality.azimuthal_gap < 180 and mag > 2.0 
 
       # Write csv entry for this event
-      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},{o.method_id},{o.evaluation_mode},{o.creation_info.author},{o.quality.standard_error},{o.quality.azimuthal_gap},{len(o.arrivals)},{len(used_stations)}")
+      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},{o.method_id},{o.evaluation_mode},{o.creation_info.author},{o.quality.standard_error if o.quality else ''},{o.quality.azimuthal_gap if o.quality else ''},{len(o.arrivals)},{len(used_stations)}")
 
       #
       # Write extended event information as xml and waveform data
