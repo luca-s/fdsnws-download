@@ -72,7 +72,7 @@ csv_catalog = "catalog.csv"
 xml_folder  = "mydirectory"  # folder where the event XML files were downloaded
 
 ### Load the csv catalog
-cat = pd.read_csv(csv_catalog, dtype=str, na_filter=False)
+cat = pd.read_csv(csv_catalog, na_filter=False)
 
 #
 # One interesting thing of using pandas to read the csv file is that you can
