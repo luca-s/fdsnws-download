@@ -2,14 +2,16 @@
 
 import sys
 import re
+from pathlib import Path
 import pandas as pd
 import obspy as ob
 from obspy import UTCDateTime
 from obspy.clients.fdsn import Client
 from obspy.core.event import Catalog
 from obspy.core.stream import Stream
-from pathlib import Path
-
+from obspy.clients.fdsn.header import FDSNTimeoutException
+from obspy.clients.fdsn.header import FDSNRequestTooLargeException
+from obspy.clients.fdsn.header import FDSNNoDataException
 
 #
 # Class to parse and verify a station filter. A station filter is
@@ -169,96 +171,131 @@ def download_catalog(client, catdir, starttime, endtime):
                                     level="response")
     inventory.write(Path(catdir, "inventory.xml"), format="STATIONXML")
 
-  #
-  # Load catalog:
-  #  includeallorigins=False: we only want preferred origins, too heavy to load all orgins
-  #  includearrivals=False: too slow to load, we can load the picks later in the loop
-  #  includeallmagnitudes=False: optional, it depends on what magnitude we want to work with
-  cat = client.get_events(starttime=starttime, endtime=endtime, 
-                          includeallorigins=False,
-                          includearrivals=False,
-                          includeallmagnitudes=False)
 
   # csv file header
   print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase,num_station")
 
-  #
-  # Loop through the catalog and extract the information we need
-  #
+  chunkstart = starttime
+  chunkend   = endtime
   id = 0
-  for ev in cat.events:
-    id += 1
+  while chunkstart < endtime:
 
-    # ev = https://docs.obspy.org/packages/autogen/obspy.core.event.event.Event.html
+    if chunkend > endtime:
+        chunkend = endtime
 
-    #
-    # Since `cat` doesn't contain arrivals (for performance reason), we need to load them now
-    #
-    ev_id = ev.resource_id.id.removeprefix(
-        'smi:org.gfz-potsdam.de/geofon/')  # this prefix is added by obspy
-    origin_cat = client.get_events(
-        eventid=ev_id, includeallorigins=False, includearrivals=True)
-    if len(origin_cat.events) != 1:
-      raise Exception("Something went wrong")
-    ev_with_picks = origin_cat.events[0]
-    if ev.resource_id != ev_with_picks.resource_id:
-      raise Exception("Something went wrong")
+    print(f"Downloading {chunkstart} ~ {chunkend}...", file=sys.stderr)
 
     #
-    # get preferred origin from event (an events might contain multiple origins: e.g. different locators or
-    # multiple updates for the same origin, we only care about the preferred one)
-    # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html
+    # Load catalog:
+    #  includeallorigins=False: we only want preferred origins, too heavy to load all orgins
+    #  includearrivals=False: too slow to load, we can load the picks later in the loop
+    #  includeallmagnitudes=False: optional, it depends on what magnitude we want to work with
+    cat = None
+    try:
+        cat = client.get_events(starttime=chunkstart, endtime=chunkend,
+                                includeallorigins=False,
+                                includearrivals=False,
+                                includeallmagnitudes=False)
+    except FDSNTimeoutException as e:
+        print(f"FDSNTimeoutException. Trying again...", file=sys.stderr)
+        continue
+    except FDSNRequestTooLargeException as e:
+        print(f"FDSNRequestTooLargeException. Splitting request in smaller ones...", file=sys.stderr)
+        chunklen   = (chunkend - chunkstart) / 2.
+        chunkend   = chunkstart + chunklen
+        continue
+    except FDSNNoDataException as e:
+        print(f"FDSNNoDataException. No data between {chunkstart} ~ {chunkend}...", file=sys.stderr)
+
     #
-    o = ev_with_picks.preferred_origin()
-    if o is None:
-        print(f"No preferred origin for event {ev_id}: skip", file=sys.stderr)
+    # Prepare next chunk to load
+    #
+    chunklen   = (chunkend - chunkstart)
+    chunkstart = chunkend
+    chunkend   += chunklen
+    if (endtime - chunkend) < chunklen: # join leftover
+        chunkend = endtime
+
+    if cat is None:
         continue
 
     #
-    # filter out non manual events ?
+    # Loop through the catalog and extract the information we need
     #
-    #if o.evaluation_mode != "manual":
-    #    continue
+    for ev in cat.events:
+      id += 1
 
-    #
-    # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
-    # https://docs.obspy.org/packages/autogen/obspy.core.event.magnitude.Magnitude.html
-    #
-    m = ev_with_picks.preferred_magnitude()
-    mag = -99  # default value in case magnitude is not computed for this event
-    mag_type = "?"
-    mag_size = 0  # convert magnitude to a size that can be used for plotting
-    if m is not None:
-      mag = m.mag
-      mag_type = m.magnitude_type
-      mag_size = magToSize(15, mag)
+      # ev = https://docs.obspy.org/packages/autogen/obspy.core.event.event.Event.html
 
-    #
-    # loop trough origin arrivals
-    #
-    used_stations = set()
-    for a in o.arrivals:
       #
-      # find the pick associated with the current arrival
-      # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Arrival.html
-      # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Pick.html
+      # Since `cat` doesn't contain arrivals (for performance reason), we need to load them now
       #
-      for p in ev_with_picks.picks:
-        if p.resource_id == a.pick_id:
-          wfid = p.waveform_id
-          used_stations.add(wfid.network_code + "." + wfid.station_code +
-              "." + (wfid.location_code if wfid.location_code else ""))
-          break
+      ev_id = ev.resource_id.id.removeprefix(
+          'smi:org.gfz-potsdam.de/geofon/')  # this prefix is added by obspy
+      origin_cat = client.get_events(
+          eventid=ev_id, includeallorigins=False, includearrivals=True)
+      if len(origin_cat.events) != 1:
+        raise Exception("Something went wrong")
+      ev_with_picks = origin_cat.events[0]
+      if ev.resource_id != ev_with_picks.resource_id:
+        raise Exception("Something went wrong")
 
-    #
-    # Here it is possible to filter the catalog by certain criteria:
-    # See also:
-    #    https://docs.obspy.org/packages/autogen/obspy.core.event.origin.OriginQuality.html
-    #
-    if True:  # example of filtering: len(o.arrivals) > 8 and len(used_stations) > 4 and o.quality.azimuthal_gap < 180 and mag > 2.0 
+      #
+      # get preferred origin from event (an events might contain multiple origins: e.g. different locators or
+      # multiple updates for the same origin, we only care about the preferred one)
+      # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html
+      #
+      o = ev_with_picks.preferred_origin()
+      if o is None:
+          print(f"No preferred origin for event {ev_id}: skip", file=sys.stderr)
+          continue
 
+      o_id = o.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/') # this prefix is added by obspy
+
+      #
+      # filter out non manual events ?
+      #
+      #if o.evaluation_mode != "manual":
+      #    continue
+
+      #
+      # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
+      # https://docs.obspy.org/packages/autogen/obspy.core.event.magnitude.Magnitude.html
+      #
+      m = ev_with_picks.preferred_magnitude()
+      mag = -99  # default value in case magnitude is not computed for this event
+      mag_type = "?"
+      mag_size = 0  # convert magnitude to a size that can be used for plotting
+      if m is not None:
+        mag = m.mag
+        mag_type = m.magnitude_type
+        mag_size = magToSize(15, mag)
+
+      #
+      # loop trough origin arrivals
+      #
+      used_stations = set()
+      for a in o.arrivals:
+        #
+        # find the pick associated with the current arrival
+        # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Arrival.html
+        # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Pick.html
+        #
+        for p in ev_with_picks.picks:
+          if p.resource_id == a.pick_id:
+            wfid = p.waveform_id
+            used_stations.add(wfid.network_code + "." + wfid.station_code +
+                "." + (wfid.location_code if wfid.location_code else ""))
+            break
+      #
       # Write csv entry for this event
-      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},{o.method_id},{o.evaluation_mode},{o.creation_info.author},{o.quality.standard_error if o.quality else ''},{o.quality.azimuthal_gap if o.quality else ''},{len(o.arrivals)},{len(used_stations)}")
+      #
+      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},"
+            f"{o.method_id},{o.evaluation_mode},"
+            f"{o.creation_info.author if o.creation_info else ''},"
+            f"{o.quality.standard_error if o.quality else ''},"
+            f"{o.quality.azimuthal_gap if o.quality else ''},"
+            f"{len(o.arrivals)},{len(used_stations)}")
 
       #
       # Write extended event information as xml and waveform data
