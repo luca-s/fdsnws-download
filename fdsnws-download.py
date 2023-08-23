@@ -219,6 +219,8 @@ def download_catalog(client, catdir, starttime, endtime):
     if cat is None:
         continue
 
+    print(f"{len(cat.events)} events found", file=sys.stderr)
+
     #
     # Loop through the catalog and extract the information we need
     #
