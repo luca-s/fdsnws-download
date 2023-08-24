@@ -3,6 +3,7 @@
 import sys
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 import pandas as pd
 import obspy as ob
 from obspy import UTCDateTime
@@ -107,50 +108,61 @@ def get_stations(inventory, ref_time, sta_filters):
 # Utility function that transforms magnitude to a phisical size, so that it can
 # be used as the size of an event when plotting it
 #
-def magToSize(scaler, mag):
+def mag_to_size(scaler, mag):
   sigma = 1e6 # [Pa] stress drop assumption, could also be higher than 1MPa
   M0 = 10**((mag + 6.03)*3/2) # [Nm] Scalar seismic moment from magnitude (Kanamori)
   SR = (M0 * 7/16 * 1/sigma)**(1/3) # [m]  Source radii from seismic moment and stress drop (Keilis-Borok, 1959)
   return SR * scaler  # scale the physical unit by something sensible for the plot
 
+#
+# Define a client that connects to a FDSN Web Service
+# https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.html
+#
+def create_client(url):
+  parsed = urlparse(url)
+  base_url = parsed._replace(netloc=f"{parsed.hostname}:{parsed.port}").geturl()
+  if parsed.username and parsed.password:
+      print(f"Connecting to {base_url} with credentials", file=sys.stderr)
+      return Client(base_url=base_url, user=parsed.username, password=parsed.password)
+  else:
+      print(f"Connecting to {base_url}", file=sys.stderr)
+      return Client(base_url=base_url)
+
 
 def main():
 
-  if len(sys.argv) < 3:
+  if len(sys.argv) < 4:
     print("Usage:")
-    print(f" {sys.argv[0]} start-date end-date")
-    print(f" {sys.argv[0]} start-date end-date output-catalog-dir")
-    print(f" {sys.argv[0]} --waveforms catalog-dir catalog.csv [wf-length] [wf-filter]")
+    print(f" {sys.argv[0]} fdsnws start-date end-date")
+    print(f" {sys.argv[0]} fdsnws start-date end-date output-catalog-dir")
+    print(f" {sys.argv[0]} fdsnws --waveforms catalog-dir catalog.csv [wf-length] [station-filter]")
     sys.exit(0)
 
-  #
-  # Define a client that connects to a FDSN Web Service
-  # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.html
-  #
-  client = Client('ClientName') # When using a client  without credentials 
-  #client = Client(base_url="http://myfdsnws.somewhere:8080", user="user", password="pass") # When using password protected clients
-  #client = Client(base_url="http://myfdsnws.somewhere:8080" ) # When using custom client without credentials
-
-
-  if sys.argv[1] == "--waveforms" and len(sys.argv) >= 4:
-    catdir = sys.argv[2]
-    catfile = sys.argv[3]
+  if sys.argv[2] == "--waveforms" and len(sys.argv) >= 5:
+    client = create_client(sys.argv[1])
+    catdir = sys.argv[3]
+    catfile = sys.argv[4]
     wflength = None
-    if len(sys.argv) >= 5:
-      wflength = float(sys.argv[4])  # [sec] how much waveform to download
-    sta_filters = None
     if len(sys.argv) >= 6:
+      wflength = float(sys.argv[5])  # [sec] how much waveform to download
+    sta_filters = None
+    if len(sys.argv) >= 7:
       sta_filters = StationNameFilter()
-      if not sta_filters.set_rules(sys.argv[5]):
+      if not sta_filters.set_rules(sys.argv[6]):
           return
+
     download_waveform(client, catdir, catfile, wflength, sta_filters)
-  elif len(sys.argv) == 3 or len(sys.argv) == 4:
-    starttime = UTCDateTime(sys.argv[1])
-    endtime = UTCDateTime(sys.argv[2])
+
+  elif len(sys.argv) == 4 or len(sys.argv) == 5:
+    client = create_client(sys.argv[1])
+    starttime = UTCDateTime(sys.argv[2])
+    endtime = UTCDateTime(sys.argv[3])
     catdir = None
-    if len(sys.argv) == 4:
-      catdir = sys.argv[3]
+    if len(sys.argv) == 5:
+      catdir = sys.argv[4]
+
     download_catalog(client, catdir, starttime, endtime)
+
   else:
     print("Wrong syntax", file=sys.stderr)
 
@@ -271,7 +283,7 @@ def download_catalog(client, catdir, starttime, endtime):
       if m is not None:
         mag = m.mag
         mag_type = m.magnitude_type
-        mag_size = magToSize(15, mag)
+        mag_size = mag_to_size(15, mag)
 
       #
       # loop trough origin arrivals
@@ -309,6 +321,7 @@ def download_catalog(client, catdir, starttime, endtime):
 
 
 def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
+
   #
   # Load the csv catalog
   #
