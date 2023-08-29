@@ -297,9 +297,7 @@ def download_catalog(client, catdir, starttime, endtime):
         #
         for p in ev_with_picks.picks:
           if p.resource_id == a.pick_id:
-            wfid = p.waveform_id
-            used_stations.add(wfid.network_code + "." + wfid.station_code +
-                "." + (wfid.location_code if wfid.location_code else ""))
+            used_stations.add(p.waveform_id.id)
             break
       #
       # Write csv entry for this event
@@ -393,10 +391,7 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
           #
           # Keep track of the stations used by the picks
           #
-          wfid = p.waveform_id
-          auto_sta_filters.add_rules(
-            f"{wfid.network_code}.{wfid.station_code}.{wfid.location_code if wfid.location_code else ''}.{wfid.channel_code}"
-          )
+          auto_sta_filters.add_rules(p.waveform_id.id)
           break
     #
     # Find the stations list that were active at this event time
