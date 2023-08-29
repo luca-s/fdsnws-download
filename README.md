@@ -24,7 +24,8 @@ The [script](https://github.com/mmesim/fdsnws-download/blob/main/fdsnws-download
 To download the events occurred during the defined time period and store them in **csv format** to catalog.csv, run the following:
 
 <pre>
-python fdsnws-download.py 'http://myfdsnws:8080' 2023-04-19T12:00:00 2023-04-19T12:03:00 > catalog.csv
+python fdsnws-download.py 'http://myfdsnws:8080' 2023-04-19T12:00:00 2023-04-19T12:03:00 \
+    > catalog.csv
 </pre>
 
 ## Phase picks
