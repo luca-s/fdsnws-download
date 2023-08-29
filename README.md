@@ -24,7 +24,7 @@ The [script](https://github.com/mmesim/fdsnws-download/blob/main/fdsnws-download
 To download the events occurred during the defined time period and store them in **csv format** to catalog.csv, run the following:
 
 <pre>
-python fdsnws-download.py 'http://myfdsnws:8080' 2023-04-19T12:00:00 2023-04-19T12:03:00 \
+python fdsnws-download.py 'http://myfdsnws:8080' '2023-04-19T12:00:00' '2023-04-19T12:03:00' \
     > catalog.csv
 </pre>
 
@@ -33,7 +33,7 @@ python fdsnws-download.py 'http://myfdsnws:8080' 2023-04-19T12:00:00 2023-04-19T
 While a csv file is easy to handle, some details cannot be stored in that format (e.g. phase picks). For this reason it is possible to specify a **destination folder**, where each **event** is stored **in [QUAKEML](https://quake.ethz.ch/quakeml/)** format along with the station inventory in the same format:
 
 <pre>
-python fdsnws-download.py 'http://myfdsnws:8080' 2023-04-19T12:00:00 2023-04-19T12:03:00 \
+python fdsnws-download.py 'http://myfdsnws:8080' '2023-04-19T12:00:00' '2023-04-19T12:03:00' \
     output-catalog-dir > catalog.csv
 </pre>
 
@@ -44,7 +44,7 @@ python fdsnws-download.py 'http://myfdsnws:8080' 2023-04-19T12:00:00 2023-04-19T
  It is possible to **download the waveforms** too. The script loads the previously downloaded catalog data (csv and QUAKEML files) and then it downloads the waveforms for each event. By default it fetches the waveforms of the stations associated to the event picks and the latest pick time is used to determine the waveform length (oring time ~ latest pick time):
 
 <pre>
- python fdsnws-download.py 'http://user:password@myfdsnws:8080' --waveforms catalog-dir catalog.csv
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv
 </pre>
 
 *Note*: Replace **catalog-dir** and **catalog.csv** with the folder name and the csv file downloaded previously.
@@ -52,7 +52,7 @@ python fdsnws-download.py 'http://myfdsnws:8080' 2023-04-19T12:00:00 2023-04-19T
 Additionally it is possible to manually specify the length of the waveforms to download and the list of stations to use:
 
 <pre>
- python fdsnws-download.py --waveforms catalog-dir catalog.csv [length] [stations_list]
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv [length] [stations_list]
 </pre>
 
 *Note*:
