@@ -237,22 +237,32 @@ def download_catalog(client, catdir, starttime, endtime):
     # Loop through the catalog and extract the information we need
     #
     for ev in cat.events:
-      id += 1
+      # ev: https://docs.obspy.org/packages/autogen/obspy.core.event.event.Event.html
 
-      # ev = https://docs.obspy.org/packages/autogen/obspy.core.event.event.Event.html
+      id += 1
 
       #
       # Since `cat` doesn't contain arrivals (for performance reason), we need to load them now
       #
-      ev_id = ev.resource_id.id.removeprefix(
-          'smi:org.gfz-potsdam.de/geofon/')  # this prefix is added by obspy
-      origin_cat = client.get_events(
-          eventid=ev_id, includeallorigins=False, includearrivals=True)
-      if len(origin_cat.events) != 1:
-        raise Exception("Something went wrong")
+      ev_id = ev.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/')  # this prefix is added by obspy
+      origin_cat = None
+      while origin_cat is None:
+        try:
+          origin_cat = client.get_events(eventid=ev_id, includeallorigins=False, includearrivals=True)
+        except FDSNTimeoutException as e:
+          print(f"FDSNTimeoutException while retrieving event {ev_id}. Trying again...", file=sys.stderr)
+        except Exception as e:
+          print(f"While retrieving event {ev_id} an exception occurred: {e}", file=sys.stderr)
+          break
+
+      if origin_cat is None or len(origin_cat.events) != 1:
+        print(f"Something went wrong with event {ev_id}: skip it", file=sys.stderr)
+        continue
+
       ev_with_picks = origin_cat.events[0]
       if ev.resource_id != ev_with_picks.resource_id:
-        raise Exception("Something went wrong")
+        print(f"Something went wrong with event {ev_id}: skip it", file=sys.stderr)
+        continue
 
       #
       # get preferred origin from event (an events might contain multiple origins: e.g. different locators or
@@ -261,16 +271,10 @@ def download_catalog(client, catdir, starttime, endtime):
       #
       o = ev_with_picks.preferred_origin()
       if o is None:
-          print(f"No preferred origin for event {ev_id}: skip", file=sys.stderr)
+          print(f"No preferred origin for event {ev_id}: skip it", file=sys.stderr)
           continue
 
       o_id = o.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/') # this prefix is added by obspy
-
-      #
-      # filter out non manual events ?
-      #
-      #if o.evaluation_mode != "manual":
-      #    continue
 
       #
       # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
