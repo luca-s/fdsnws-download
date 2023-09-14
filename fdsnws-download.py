@@ -191,7 +191,7 @@ def download_catalog(client, catdir, starttime, endtime):
       print(f"Inventory file {inv_file} exists: do not download it again", file=sys.stderr)
 
   # csv file header
-  print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase,num_station")
+  print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase")
 
   chunkstart = starttime
   chunkend   = endtime
@@ -248,6 +248,49 @@ def download_catalog(client, catdir, starttime, endtime):
       id += 1
 
       #
+      # get preferred origin from event (an events might contain multiple origins: e.g. different locators or
+      # multiple updates for the same origin, we only care about the preferred one)
+      # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html
+      #
+      o = ev.preferred_origin()
+      if o is None:
+          print(f"No preferred origin for event {ev_id}: skip it", file=sys.stderr)
+          continue
+
+      o_id = o.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/') # this prefix is added by obspy
+
+      #
+      # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
+      # https://docs.obspy.org/packages/autogen/obspy.core.event.magnitude.Magnitude.html
+      #
+      m = ev.preferred_magnitude()
+      mag = -99  # default value in case magnitude is not computed for this event
+      mag_type = "?"
+      mag_size = 0  # convert magnitude to a size that can be used for plotting
+      if m is not None:
+        mag = m.mag
+        mag_type = m.magnitude_type
+        mag_size = mag_to_size(15, mag)
+
+      #
+      # Write csv entry for this event
+      #
+      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},"
+            f"{o.method_id},{o.evaluation_mode},"
+            f"{o.creation_info.author if o.creation_info else ''},"
+            f"{o.quality.standard_error if o.quality else ''},"
+            f"{o.quality.azimuthal_gap if o.quality else ''},"
+            f"{o.quality.used_phase_count if o.quality else ''}")
+
+      if catdir is None:
+          continue
+
+      ev_file = Path(catdir, f"ev{id}.xml")
+      if ev_file.is_file():
+        print(f"File {ev_file} exists: skip event", file=sys.stderr)
+        continue
+
+      #
       # Since `cat` doesn't contain arrivals (for performance reason), we need to load them now
       #
       ev_id = ev.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/')  # this prefix is added by obspy
@@ -271,61 +314,11 @@ def download_catalog(client, catdir, starttime, endtime):
         continue
 
       #
-      # get preferred origin from event (an events might contain multiple origins: e.g. different locators or
-      # multiple updates for the same origin, we only care about the preferred one)
-      # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Origin.html
-      #
-      o = ev_with_picks.preferred_origin()
-      if o is None:
-          print(f"No preferred origin for event {ev_id}: skip it", file=sys.stderr)
-          continue
-
-      o_id = o.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/') # this prefix is added by obspy
-
-      #
-      # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
-      # https://docs.obspy.org/packages/autogen/obspy.core.event.magnitude.Magnitude.html
-      #
-      m = ev_with_picks.preferred_magnitude()
-      mag = -99  # default value in case magnitude is not computed for this event
-      mag_type = "?"
-      mag_size = 0  # convert magnitude to a size that can be used for plotting
-      if m is not None:
-        mag = m.mag
-        mag_type = m.magnitude_type
-        mag_size = mag_to_size(15, mag)
-
-      #
-      # loop trough origin arrivals
-      #
-      used_stations = set()
-      for a in o.arrivals:
-        #
-        # find the pick associated with the current arrival
-        # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Arrival.html
-        # https://docs.obspy.org/packages/autogen/obspy.core.event.origin.Pick.html
-        #
-        for p in ev_with_picks.picks:
-          if p.resource_id == a.pick_id:
-            used_stations.add(p.waveform_id.id)
-            break
-      #
-      # Write csv entry for this event
-      #
-      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},"
-            f"{o.method_id},{o.evaluation_mode},"
-            f"{o.creation_info.author if o.creation_info else ''},"
-            f"{o.quality.standard_error if o.quality else ''},"
-            f"{o.quality.azimuthal_gap if o.quality else ''},"
-            f"{len(o.arrivals)},{len(used_stations)}")
-
-      #
       # Write extended event information as xml and waveform data
       #
-      if catdir:
-        cat_out = Catalog()
-        cat_out.append(ev_with_picks)
-        cat_out.write(Path(catdir, f"ev{id}.xml"), format="QUAKEML")
+      cat_out = Catalog()
+      cat_out.append(ev_with_picks)
+      cat_out.write(ev_file, format="QUAKEML")
 
 
 def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
@@ -359,9 +352,9 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
     #
     print(f"Processing event {ev_id}", file=sys.stderr)
 
-    dest = Path(catdir, f"ev{ev_id}.mseed")
-    if dest.is_file():
-      print(f"File {dest} exists: skip event", file=sys.stderr)
+    wf_file = Path(catdir, f"ev{ev_id}.mseed")
+    if wf_file.is_file():
+      print(f"File {wf_file} exists: skip event", file=sys.stderr)
       continue
 
     #
@@ -440,8 +433,8 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
 
     if waveforms:
       waveforms.trim(starttime=starttime, endtime=endtime)
-      print(f"Saving {dest}", file=sys.stderr)
-      waveforms.write(dest, format="MSEED")
+      print(f"Saving {wf_file}", file=sys.stderr)
+      waveforms.write(wf_file, format="MSEED")
 
 if __name__ == '__main__':
   main()
