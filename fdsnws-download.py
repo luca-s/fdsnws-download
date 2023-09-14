@@ -178,11 +178,17 @@ def download_catalog(client, catdir, starttime, endtime):
   # https://docs.obspy.org/packages/autogen/obspy.core.inventory.inventory.Inventory.html
   #
   if catdir:
-    inventory = client.get_stations(network="*", station="*", location="*", channel="*",
-                                    starttime=starttime,  endtime=endtime,
-                                    level="response")
-    inventory.write(Path(catdir, "inventory.xml"), format="STATIONXML")
-
+    inv_file = Path(catdir, "inventory.xml")
+    if not inv_file.is_file():
+      try:
+        inventory = client.get_stations(network="*", station="*", location="*", channel="*",
+                                        starttime=starttime,  endtime=endtime,
+                                        level="response")
+        inventory.write(inv_file, format="STATIONXML")
+      except Exception as e:
+        print(f"Cannot download inventory: skip it ({e})", file=sys.stderr)
+    else:
+      print(f"Inventory file {inv_file} exists: do not download it again", file=sys.stderr)
 
   # csv file header
   print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase,num_station")
