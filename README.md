@@ -94,21 +94,30 @@ for row in cat.itertuples():
   #
   ev_id = row.id
   print(f"Processing event {ev_id}")
-
   #
   # We want to access all event information, so we load its XML file
   # with obspy
   #
   cat = ob.core.event.read_events( Path(xml_folder, f"ev{ev_id}.xml"))
   ev= cat[0] # we know we stored only one event in this catalog
-
   #
   # We can now have access to all events information e.g. access picks
   #
-
   # get preferred origin
   o = ev.preferred_origin()
-  print(f"Origin {o.longitude} {o.latitude} {o.depth} {o.time}")
+  print(f"Origin {o.time} {o.longitude} {o.latitude} {o.depth} {o.evaluation_mode}")
+
+  if o.quality:
+      print(f" associated_phase_count {o.quality.associated_phase_count}")
+      print(f" used_phase_count {o.quality.used_phase_count}")
+      print(f" associated_station_count {o.quality.associated_station_count}")
+      print(f" used_station_count {o.quality.used_station_count}")
+      print(f" standard_error {o.quality.standard_error}")
+      print(f" azimuthal_gap {o.quality.azimuthal_gap}")
+      print(f" minimum_distance {o.quality.minimum_distance}")
+      print(f" median_distance {o.quality.median_distance}")
+      print(f" maximum_distance {o.quality.maximum_distance}")
+
 
   # loop trough origin arrivals
   for a in o.arrivals:
@@ -118,7 +127,7 @@ for row in cat.itertuples():
     for p in ev.picks:
       if p.resource_id == a.pick_id:
         wfid = p.waveform_id
-        print(f"Found pick {p.time} @ {wfid.network_code}.{wfid.station_code}.{wfid.location_code}.{wfid.channel_code}")
+        print(f" Pick {p.evaluation_mode} {a.phase} @ {wfid.network_code}.{wfid.station_code}.{wfid.location_code}.{wfid.channel_code} residual {a.time_residual} distance {a.distance} deg {p.time}")
         break
 
   #
