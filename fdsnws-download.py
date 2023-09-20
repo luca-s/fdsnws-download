@@ -135,23 +135,29 @@ def main():
     print("Usage:")
     print(f" {sys.argv[0]} fdsnws start-date end-date")
     print(f" {sys.argv[0]} fdsnws start-date end-date output-catalog-dir")
-    print(f" {sys.argv[0]} fdsnws --waveforms catalog-dir catalog.csv [wf-length] [station-filter]")
+    print(f" {sys.argv[0]} fdsnws --waveforms catalog-dir catalog.csv [length-before-event:length-after-event] [station-filter]")
     sys.exit(0)
 
   if sys.argv[2] == "--waveforms" and len(sys.argv) >= 5:
     client = create_client(sys.argv[1])
     catdir = sys.argv[3]
     catfile = sys.argv[4]
-    wflength = None
+    length_before = None
+    length_after = None
     if len(sys.argv) >= 6:
-      wflength = float(sys.argv[5])  # [sec] how much waveform to download
+      tokens = sys.argv[5].split(":")
+      if len(tokens) != 2:
+        print(f"Wrong format for waveform length option: {sys.argv[5]}", file=sys.stderr)
+        return
+      length_before = float(tokens[0]) # [sec]
+      length_after  = float(tokens[1]) # [sec]
     sta_filters = None
     if len(sys.argv) >= 7:
       sta_filters = StationNameFilter()
       if not sta_filters.set_rules(sys.argv[6]):
           return
 
-    download_waveform(client, catdir, catfile, wflength, sta_filters)
+    download_waveform(client, catdir, catfile, length_before, length_after, sta_filters)
 
   elif len(sys.argv) == 4 or len(sys.argv) == 5:
     client = create_client(sys.argv[1])
@@ -321,7 +327,7 @@ def download_catalog(client, catdir, starttime, endtime):
       cat_out.write(ev_file, format="QUAKEML")
 
 
-def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
+def download_waveform(client, catdir, catfile, length_before=None, length_after=None, sta_filters=None):
 
   #
   # Load the csv catalog
@@ -346,11 +352,12 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
   for row in cat.itertuples():
 
     ev_id = row.id
+    evtime = UTCDateTime(row.time)
 
     #
     # you can fetch any csv column with 'row.column'
     #
-    print(f"Processing event {ev_id}", file=sys.stderr)
+    print(f"Processing event {ev_id} {evtime}", file=sys.stderr)
 
     wf_file = Path(catdir, f"ev{ev_id}.mseed")
     if wf_file.is_file():
@@ -358,61 +365,73 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
       continue
 
     #
-    # We want to access all event information, so we load its XML file
-    # with obspy
-    #
-    evfile = Path(catdir, f"ev{ev_id}.xml")
-    print(f"Reading {evfile}", file=sys.stderr)
-    tmpcat = ob.core.event.read_events(evfile)
-    ev = tmpcat[0] # we know we stored only one event in this catalog
-
-    #
-    # get preferred origin from event
-    #
-    o = ev.preferred_origin()
-    if o is None:
-        print(f"No preferred origin for event {ev_id}: skip", file=sys.stderr)
-        continue
-
-    #
     # loop trough origin arrivals to find the used stations and the
     # latest pick time
     #
     last_pick_time = None
     auto_sta_filters = StationNameFilter()
-    for a in o.arrivals:
+
+    if sta_filters is None or length_before is None or length_after is None:
+
       #
-      # find the pick associated with the current arrival
+      # We want to access all event information, so we load its XML file
+      # with obspy
       #
-      for p in ev.picks:
-        if p.resource_id == a.pick_id:
-          #
-          # Keep track of the last pick time
-          #
-          if last_pick_time is None or p.time > last_pick_time:
-              last_pick_time = p.time
-          #
-          # Keep track of the stations used by the picks
-          #
-          auto_sta_filters.add_rules(p.waveform_id.id)
-          break
+      evfile = Path(catdir, f"ev{ev_id}.xml")
+      print(f"Reading {evfile}", file=sys.stderr)
+      tmpcat = ob.core.event.read_events(evfile)
+      ev = tmpcat[0] # we know we stored only one event in this catalog
+
+      #
+      # get preferred origin from event
+      #
+      o = ev.preferred_origin()
+      if o is None:
+        print(f"No preferred origin for event {ev_id}: skip", file=sys.stderr)
+        continue
+
+      if o.time != evtime: # this should never happen
+        print(f"Event {ev_id} prferred origin time is not the same as event time: skip event", file=sys.stderr)
+        continue
+
+      for a in o.arrivals:
+        #
+        # find the pick associated with the current arrival
+        #
+        for p in ev.picks:
+          if p.resource_id == a.pick_id:
+            #
+            # Keep track of the last pick time
+            #
+            if last_pick_time is None or p.time > last_pick_time:
+                last_pick_time = p.time
+            #
+            # Keep track of the stations used by the picks
+            #
+            auto_sta_filters.add_rules(p.waveform_id.id)
+            break
+
     #
     # Find the stations list that were active at this event time
     #
     stations = get_stations(
-      inventory=inv, ref_time=o.time,
+      inventory=inv, ref_time=evtime,
       sta_filters=(auto_sta_filters if sta_filters is None else sta_filters)
     )
 
     #
-    # Now that we know the last pick time we can fix the time window for all waveforms
+    # Fix the time window for all waveforms
     #
-    starttime = o.time
-    if wflength is None:
+    if length_before is None:
+        starttime = evtime
+    else:
+        starttime = evtime - length_before
+
+    if length_after is None: 
       endtime = last_pick_time
       endtime += (endtime - starttime) * 0.3 # add extra 30% 
     else:
-      endtime = starttime + wflength # set user defined length
+      endtime = evtime + length_after
 
     bulk = []
     for (network_code, station_code, location_code, channel_code) in stations:
@@ -423,7 +442,7 @@ def download_waveform(client, catdir, catfile, wflength=None, sta_filters=None):
     #
     waveforms = None
     if bulk:
-      print(f"Downloading {len(bulk)} waveforms", file=sys.stderr)
+      print(f"Downloading {len(bulk)} waveforms between {starttime} ~ {endtime} ", file=sys.stderr)
       try:
         # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.get_waveforms_bulk.html
         # https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html

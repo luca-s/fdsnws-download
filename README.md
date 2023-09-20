@@ -52,12 +52,22 @@ python fdsnws-download.py 'http://myfdsnws:8080' '2023-04-19T12:00:00' '2023-04-
 Additionally it is possible to manually specify the length of the waveforms to download and the list of stations to use:
 
 <pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv [length] [stations_list]
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv \
+     [length-before-event:length-after-event] [station-filter]
 </pre>
 
 *Note*:
-- **length** is in seconds **e.g.** 3.5, 0.030
-- **stations_list** is a comma separated list of station filters where each filter can be: "net", "net.sta", "net.sta.loc" or "net.sta.loc.cha" and it supports wildcards such as *,?,(,),| **e.g.** "CH,GR.(STA01|STA02).\*.HH?" - download all stations of the network CH (identical to CH.\*.\*.\*) plus the stations GT.STA01.\*.HH? and GT.STA02.\*.HH?
+- **length-before-event** waveform length in seconds (e.g. 3.5, 0.030) to download before the event time
+- **length-after-event** waveform length in seconds (e.g. 3.5, 0.030) to download after the event time
+- **stations-filter** is a comma separated list of station filters where each filter can be: "net", "net.sta", "net.sta.loc" or "net.sta.loc.cha" and it supports wildcards such as *,?,(,),| 
+
+e.g. Download 3 seconds of waveforms before the event and 10 after and download all stations of the network CH (identical to CH.\*.\*.\*) plus the stations GT.STA01.\*.HH? and GT.STA02.\*.HH?
+
+<pre>
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv \
+     "3:10" "CH,GR.(STA01|STA02).\*.HH?"
+</pre>
+
 
 # Post-processing
 
