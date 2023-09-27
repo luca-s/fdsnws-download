@@ -186,6 +186,7 @@ def download_catalog(client, catdir, starttime, endtime):
   if catdir:
     inv_file = Path(catdir, "inventory.xml")
     if not inv_file.is_file():
+      print(f"Downloading inventory {inv_file}...", file=sys.stderr)
       try:
         inventory = client.get_stations(network="*", station="*", location="*", channel="*",
                                         starttime=starttime,  endtime=endtime,
