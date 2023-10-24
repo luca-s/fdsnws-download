@@ -198,7 +198,7 @@ def download_catalog(client, catdir, starttime, endtime):
       print(f"Inventory file {inv_file} exists: do not download it again", file=sys.stderr)
 
   # csv file header
-  print("id,time,latitude,longitude,depth,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase")
+  print("id,time,latitude,longitude,depth,event_type,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase")
 
   chunkstart = starttime
   chunkend   = endtime
@@ -282,7 +282,9 @@ def download_catalog(client, catdir, starttime, endtime):
       #
       # Write csv entry for this event
       #
-      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},{mag_type},{mag},{mag_size},"
+      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},"
+            f"{ev.event_type if ev.event_type else ''},"
+            f"{mag_type},{mag},{mag_size},"
             f"{o.method_id},{o.evaluation_mode},"
             f"{o.creation_info.author if o.creation_info else ''},"
             f"{o.quality.standard_error if o.quality else ''},"
