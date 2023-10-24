@@ -217,7 +217,7 @@ def download_catalog(client, catdir, starttime, endtime):
     #  includeallmagnitudes=False: optional, it depends on what magnitude we want to work with
     cat = None
     try:
-        cat = client.get_events(starttime=chunkstart, endtime=chunkend,
+        cat = client.get_events(starttime=chunkstart, endtime=chunkend, orderby="time-asc",
                                 includeallorigins=False,
                                 includearrivals=False,
                                 includeallmagnitudes=False)
