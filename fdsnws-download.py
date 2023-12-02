@@ -198,7 +198,7 @@ def download_catalog(client, catdir, starttime, endtime):
       print(f"Inventory file {inv_file} exists: do not download it again", file=sys.stderr)
 
   # csv file header
-  print("id,time,latitude,longitude,depth,event_type,mag_type,mag,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase")
+  print("id,isotime,latitude,longitude,depth,event_type,mag_type,magnitude,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase")
 
   chunkstart = starttime
   chunkend   = endtime
@@ -271,7 +271,7 @@ def download_catalog(client, catdir, starttime, endtime):
       # https://docs.obspy.org/packages/autogen/obspy.core.event.magnitude.Magnitude.html
       #
       m = ev.preferred_magnitude()
-      mag = -99  # default value in case magnitude is not computed for this event
+      mag = None
       mag_type = "?"
       mag_size = 0  # convert magnitude to a size that can be used for plotting
       if m is not None:
