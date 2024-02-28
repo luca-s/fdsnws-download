@@ -13,11 +13,9 @@ A customizable script to acquire data [waveforms, earthquake catalogs, phase pic
 
 ## Introduction
 
-The [script](https://github.com/mmesim/fdsnws-download/blob/main/fdsnws-download.py) is structured in a way that it is highly customizable in order to provide maximum flexibility to the user. 
+You don't need to install the [script](https://github.com/mmesim/fdsnws-download/blob/main/fdsnws-download.py), just download and use it. The idea is that the user can customize the code by editing the script to achieve functionalities not provided by default.
 
 **FDSNWS URL**: the FDSNWS address from which the data will be requested can be defined with credentials( http://user:password@myfdsnws.somewhere:8080) or without it (http://myfdsnws.somewhere:8080).
-
-**Other parameters**: In the different functions the user can define criteria to filter the earthquake catalog, and to define the window length of the requested waveforms (*extratime*). The format type of the data is also flexible and can be defined in the script (e.g **SAC** instead of **MSEED**). 
 
 ## Earthquake catalog
 
