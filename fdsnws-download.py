@@ -355,7 +355,7 @@ def download_waveform(client, catdir, catfile, length_before=None, length_after=
   for row in cat.itertuples():
 
     ev_id = row.id
-    evtime = UTCDateTime(row.time)
+    evtime = UTCDateTime(row.isotime)
 
     #
     # you can fetch any csv column with 'row.column'
