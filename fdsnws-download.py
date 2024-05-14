@@ -105,16 +105,6 @@ def get_stations(inventory, ref_time, sta_filters):
 
 
 #
-# Utility function that transforms magnitude to a phisical size, so that it can
-# be used as the size of an event when plotting it
-#
-def mag_to_size(scaler, mag):
-  sigma = 1e6 # [Pa] stress drop assumption, could also be higher than 1MPa
-  M0 = 10**((mag + 6.03)*3/2) # [Nm] Scalar seismic moment from magnitude (Kanamori)
-  SR = (M0 * 7/16 * 1/sigma)**(1/3) # [m]  Source radii from seismic moment and stress drop (Keilis-Borok, 1959)
-  return SR * scaler  # scale the physical unit by something sensible for the plot
-
-#
 # Define a client that connects to a FDSN Web Service
 # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.html
 #
@@ -198,7 +188,7 @@ def download_catalog(client, catdir, starttime, endtime):
       print(f"Inventory file {inv_file} exists: do not download it again", file=sys.stderr)
 
   # csv file header
-  print("id,isotime,latitude,longitude,depth,event_type,mag_type,magnitude,mag_plot_size,method_id,evaluation_mode,author,rms,az_gap,num_phase")
+  print("id,isotime,latitude,longitude,depth,event_type,mag_type,magnitude,method_id,evaluation_mode,author,rms,az_gap,num_phase")
 
   chunkstart = starttime
   chunkend   = endtime
@@ -273,18 +263,16 @@ def download_catalog(client, catdir, starttime, endtime):
       m = ev.preferred_magnitude()
       mag = None
       mag_type = "?"
-      mag_size = 0  # convert magnitude to a size that can be used for plotting
       if m is not None:
         mag = m.mag
         mag_type = m.magnitude_type
-        mag_size = mag_to_size(15, mag)
 
       #
       # Write csv entry for this event
       #
       print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},"
             f"{ev.event_type if ev.event_type else ''},"
-            f"{mag_type},{mag},{mag_size},"
+            f"{mag_type},{mag},"
             f"{o.method_id},{o.evaluation_mode},"
             f"{o.creation_info.author if o.creation_info else ''},"
             f"{o.quality.standard_error if o.quality else ''},"
