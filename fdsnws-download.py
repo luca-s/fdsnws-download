@@ -108,28 +108,38 @@ def get_stations(inventory, ref_time, sta_filters):
 # Define a client that connects to a FDSN Web Service
 # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.html
 #
-def create_client(url):
+def create_client(url, timeout):
   parsed = urlparse(url)
   base_url = parsed._replace(netloc=f"{parsed.hostname}:{parsed.port}").geturl()
   if parsed.username and parsed.password:
       print(f"Connecting to {base_url} with credentials", file=sys.stderr)
-      return Client(base_url=base_url, user=parsed.username, password=parsed.password)
+      return Client(base_url=base_url, user=parsed.username, password=parsed.password, timeout=timeout)
   else:
       print(f"Connecting to {base_url}", file=sys.stderr)
-      return Client(base_url=base_url)
+      return Client(base_url=base_url, timeout=timeout)
 
+def usage():
+    print("Usage:")
+    print(f" {sys.argv[0]} fdsnws start-date end-date [--timeout sec]")
+    print(f" {sys.argv[0]} fdsnws start-date end-date output-catalog-dir [--timeout sec]")
+    print(f" {sys.argv[0]} fdsnws --waveforms catalog-dir catalog.csv [length-before-event:length-after-event] [station-filter] [--timeout sec]")
+    print("\nNotes:")
+    print(" Dates should be given in any format supported by obspy.UTCDateTime e.g. 2023-04-19T12:00:00 (UTC)")
+    print(" --timeout is optional and specify the fdsnws connection timeout in seconds. Useful to deal with large requests that require a long time to be fulfilled")
 
 def main():
 
   if len(sys.argv) < 4:
-    print("Usage:")
-    print(f" {sys.argv[0]} fdsnws start-date end-date")
-    print(f" {sys.argv[0]} fdsnws start-date end-date output-catalog-dir")
-    print(f" {sys.argv[0]} fdsnws --waveforms catalog-dir catalog.csv [length-before-event:length-after-event] [station-filter]")
+    usage()
     sys.exit(0)
 
+  timeout = 300
+  if sys.argv[-2] == "--timeout":
+      timeout = float(sys.argv[-1])
+      sys.argv = sys.argv[:-2]
+
   if sys.argv[2] == "--waveforms" and len(sys.argv) >= 5:
-    client = create_client(sys.argv[1])
+    client = create_client(sys.argv[1], timeout)
     catdir = sys.argv[3]
     catfile = sys.argv[4]
     length_before = None
@@ -150,7 +160,7 @@ def main():
     download_waveform(client, catdir, catfile, length_before, length_after, sta_filters)
 
   elif len(sys.argv) == 4 or len(sys.argv) == 5:
-    client = create_client(sys.argv[1])
+    client = create_client(sys.argv[1], timeout)
     starttime = UTCDateTime(sys.argv[2])
     endtime = UTCDateTime(sys.argv[3])
     catdir = None
@@ -161,6 +171,7 @@ def main():
 
   else:
     print("Wrong syntax", file=sys.stderr)
+    usage()
 
 
 def download_catalog(client, catdir, starttime, endtime):
@@ -211,11 +222,11 @@ def download_catalog(client, catdir, starttime, endtime):
                                 includeallorigins=False,
                                 includearrivals=False,
                                 includeallmagnitudes=False)
-    except FDSNTimeoutException as e:
-        print(f"FDSNTimeoutException. Trying again...", file=sys.stderr)
-        continue
-    except FDSNRequestTooLargeException as e:
-        print(f"FDSNRequestTooLargeException. Splitting request in smaller ones...", file=sys.stderr)
+    except (FDSNRequestTooLargeException, FDSNTimeoutException) as e:
+        if isinstance(e, FDSNTimeoutException):
+            print("FDSNTimeoutException: splitting request in smaller ones (consider --timeout option)...", file=sys.stderr)
+        else:
+            print("FDSNRequestTooLargeException: splitting request in smaller ones...", file=sys.stderr)
         chunklen   = (chunkend - chunkstart) / 2.
         chunkend   = chunkstart + chunklen
         continue
@@ -296,7 +307,7 @@ def download_catalog(client, catdir, starttime, endtime):
         try:
           origin_cat = client.get_events(eventid=ev_id, includeallorigins=False, includearrivals=True)
         except FDSNTimeoutException as e:
-          print(f"FDSNTimeoutException while retrieving event {ev_id}. Trying again...", file=sys.stderr)
+          print(f"FDSNTimeoutException while retrieving event {ev_id} (consider --timeout option). Trying again...", file=sys.stderr)
         except Exception as e:
           print(f"While retrieving event {ev_id} an exception occurred: {e}", file=sys.stderr)
           break
@@ -438,6 +449,8 @@ def download_waveform(client, catdir, catfile, length_before=None, length_after=
         # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.get_waveforms_bulk.html
         # https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html
         waveforms = client.get_waveforms_bulk(bulk)
+      except FDSNTimeoutException as e:
+        print(f"FDSNTimeoutException: Cannot fetch waveforms for event {id} (consider --timeout option)", file=sys.stderr)
       except Exception as e:
         print(f"Cannot fetch waveforms for event {id}: {e}", file=sys.stderr)
 
