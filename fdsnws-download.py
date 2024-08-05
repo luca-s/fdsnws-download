@@ -199,7 +199,7 @@ def download_catalog(client, catdir, starttime, endtime):
       print(f"Inventory file {inv_file} exists: do not download it again", file=sys.stderr)
 
   # csv file header
-  print("id,isotime,latitude,longitude,depth,event_type,mag_type,magnitude,method_id,evaluation_mode,author,rms,az_gap,num_phase")
+  print("id,event,origin,isotime,latitude,longitude,depth,event_type,mag_type,magnitude,method_id,evaluation_mode,author,rms,az_gap,num_phase")
 
   chunkstart = starttime
   chunkend   = endtime
@@ -262,10 +262,8 @@ def download_catalog(client, catdir, starttime, endtime):
       #
       o = ev.preferred_origin()
       if o is None:
-          print(f"No preferred origin for event {ev_id}: skip it", file=sys.stderr)
+          print(f"No preferred origin for event {ev.resource_id}: skip it", file=sys.stderr)
           continue
-
-      o_id = o.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/') # this prefix is added by obspy
 
       #
       # get preferred magnitude from event (multiple magnitude might be present, we only care about the preferred one)
@@ -281,7 +279,7 @@ def download_catalog(client, catdir, starttime, endtime):
       #
       # Write csv entry for this event
       #
-      print(f"{id},{o.time},{o.latitude},{o.longitude},{o.depth},"
+      print(f"{id},{ev.resource_id},{o.resource_id},{o.time},{o.latitude},{o.longitude},{o.depth},"
             f"{ev.event_type if ev.event_type else ''},"
             f"{mag_type},{mag},"
             f"{o.method_id},{o.evaluation_mode},"
@@ -301,7 +299,7 @@ def download_catalog(client, catdir, starttime, endtime):
       #
       # Since `cat` doesn't contain arrivals (for performance reason), we need to load them now
       #
-      ev_id = ev.resource_id.id.removeprefix('smi:org.gfz-potsdam.de/geofon/')  # this prefix is added by obspy
+      ev_id = str(ev.resource_id)
       origin_cat = None
       while origin_cat is None:
         try:
