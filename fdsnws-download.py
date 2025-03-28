@@ -297,13 +297,17 @@ def download_catalog(client, catdir, starttime, endtime):
         continue
 
       #
-      # Since `cat` doesn't contain arrivals (for performance reason), we need to load them now
+      # Since `cat` doesn't contain arrivals and multiple origins/magnitudes (for performance reason),
+      # we need to load them now
       #
       ev_id = str(ev.resource_id)
       origin_cat = None
       while origin_cat is None:
         try:
-          origin_cat = client.get_events(eventid=ev_id, includeallorigins=False, includearrivals=True)
+          origin_cat = client.get_events(eventid=ev_id,
+                                         includeallorigins=True,
+                                         includearrivals=True,
+                                         includeallmagnitudes=True)
         except FDSNTimeoutException as e:
           print(f"FDSNTimeoutException while retrieving event {ev_id} (consider --timeout option). Trying again...", file=sys.stderr)
         except Exception as e:
