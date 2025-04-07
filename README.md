@@ -75,12 +75,18 @@ Here we demonstrate how to use the csv catalog and the events stored in QUAKEML 
 import pandas as pd
 import obspy as ob
 from pathlib import Path
+from obspy.core import UTCDateTime
 
 csv_catalog = "catalog.csv"
 xml_folder  = "mydirectory"  # folder where the event XML files were downloaded
 
-### Load the csv catalog
-cat = pd.read_csv(csv_catalog, na_filter=False)
+#
+# Load the csv catalog
+#
+cat = pd.read_csv(csv_catalog, na_filter=False, parse_dates=False, converters={"isotime": lambda d: UTCDateTime(d)})
+
+# Check the column types
+print(cat.dtypes)
 
 #
 # One interesting thing of using pandas to read the csv file is that you can
@@ -90,7 +96,9 @@ cat = pd.read_csv(csv_catalog, na_filter=False)
 #
 #   cat = cat[ cat["num_phase"] >= 8 ] # at least 8 picks
 #
-#   cat = cat[ cat["depth"] > -1400 & cat["depth"] < -1200 ] # events between 1200~1400 meters
+#   cat = cat[ (cat["depth"] > -1.500) & (cat["depth"] < -1.200) ] # events between 1200~1400 meters
+#
+#   cat[ (cat.isotime > UTCDateTime("2024-04-30T05:00:00.369")) & (cat.isotime < UTCDateTime("2024-04-30T05:22:00.2369")) ]
 #
 
 #
