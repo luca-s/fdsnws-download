@@ -301,34 +301,16 @@ def download_catalog(client, catdir, starttime, endtime):
       # we need to load them now
       #
       ev_id = str(ev.resource_id)
-      origin_cat = None
-      while origin_cat is None:
-        try:
-          origin_cat = client.get_events(eventid=ev_id,
-                                         includeallorigins=True,
-                                         includearrivals=True,
-                                         includeallmagnitudes=True)
-        except FDSNTimeoutException as e:
-          print(f"FDSNTimeoutException while retrieving event {ev_id} (consider --timeout option). Trying again...", file=sys.stderr)
-        except Exception as e:
-          print(f"While retrieving event {ev_id} an exception occurred: {e}", file=sys.stderr)
-          break
-
-      if origin_cat is None or len(origin_cat.events) != 1:
-        print(f"Something went wrong with event {ev_id}: skip it", file=sys.stderr)
-        continue
-
-      ev_with_picks = origin_cat.events[0]
-      if ev.resource_id != ev_with_picks.resource_id:
-        print(f"Something went wrong with event {ev_id}: skip it", file=sys.stderr)
-        continue
-
-      #
-      # Write extended event information as xml and waveform data
-      #
-      cat_out = Catalog()
-      cat_out.append(ev_with_picks)
-      cat_out.write(ev_file, format="QUAKEML")
+      try:
+        client.get_events(eventid=ev_id,
+                          includeallorigins=True,
+                          includearrivals=True,
+                          includeallmagnitudes=True,
+                          filename=ev_file)
+      except FDSNTimeoutException as e:
+        print(f"FDSNTimeoutException while retrieving event {ev_id} (consider --timeout option)", file=sys.stderr)
+      except Exception as e:
+        print(f"While retrieving event {ev_id} an exception occurred: {e}", file=sys.stderr)
 
 
 def download_waveform(client, catdir, catfile, length_before=None, length_after=None, sta_filters=None):
