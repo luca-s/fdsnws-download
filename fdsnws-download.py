@@ -54,7 +54,7 @@ class StationNameFilter:
             #
             # Check for valid characters
             #
-            valid_str = re.compile("[A-Z|a-z|0-9|\?|\*|\||\(|\)]*")
+            valid_str = re.compile(r"[A-Z|a-z|0-9|\?|\*|\||\(|\)]*")
             for tok in tokens:
                 if valid_str.fullmatch(tok) is None:
                   print(f"Error: check station filter syntax ({rules})",
