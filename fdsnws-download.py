@@ -110,11 +110,15 @@ def get_stations(inventory, ref_time, sta_filters):
 #
 def create_client(url, timeout):
   parsed = urlparse(url)
-  base_url = parsed._replace(netloc=f"{parsed.hostname}:{parsed.port}").geturl()
   if parsed.username and parsed.password:
+      if parsed.port:
+          base_url = parsed._replace(netloc=f"{parsed.hostname}:{parsed.port}").geturl()
+      else:
+          base_url = parsed._replace(netloc=f"{parsed.hostname}").geturl()
       print(f"Connecting to {base_url} with credentials", file=sys.stderr)
       return Client(base_url=base_url, user=parsed.username, password=parsed.password, timeout=timeout)
   else:
+      base_url = url
       print(f"Connecting to {base_url}", file=sys.stderr)
       return Client(base_url=base_url, timeout=timeout)
 
