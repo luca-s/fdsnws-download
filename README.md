@@ -1,7 +1,7 @@
 
 # Introduction
 
-A customizable script to acquire data [waveforms, earthquake catalogs, phase picks] using FDSN Web Services and the Client provided by [obspy](https://docs.obspy.org/).
+This script utilizes FDSN Web Services and the ObsPy library to acquire seismological data, including waveforms, earthquake catalogs, and phase picks.
 
 # Requirements
 
@@ -11,48 +11,52 @@ A customizable script to acquire data [waveforms, earthquake catalogs, phase pic
 
 # How to
 
-## Introduction
+## How to Use
 
-You don't need to install the [script](https://github.com/mmesim/fdsnws-download/blob/main/fdsnws-download.py), just download and use it. The idea is that the user can customize the code by editing the script to achieve functionalities not provided by default.
+### Getting Started
 
-**FDSNWS URL**: the FDSNWS address from which the data will be requested can be defined with credentials( http://user:password@myfdsnws.somewhere:8080) or without it (http://myfdsnws.somewhere:8080).
+To use this script, simply download the `fdsnws-download.py` file. You do not need to install it as a Python package. The script is designed for direct execution and can be customized by editing its source code to extend its functionalities.
+
+**FDSNWS URL**: This is the address of the FDSN Web Service. It can include credentials (e.g., `http://user:password@myfdsnws.somewhere:8080`) or be without them (e.g., `http://myfdsnws.somewhere:8080`). Replace `[FDSNWS_URL]` in the examples below with your specific service URL.
 
 ## Earthquake catalog
 
-To download the events occurred during the defined time period and store them in **csv format** to catalog.csv, run the following:
+To download events within a defined time period and store them in **CSV format** to `catalog.csv`, run the following command:
 
-<pre>
-python fdsnws-download.py 'http://myfdsnws:8080' '2023-04-19T12:00:00' '2023-04-19T12:03:00' \
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' '2023-04-19T12:00:00' '2023-04-19T12:03:00' \
     > catalog.csv
-</pre>
+```
+
+The `> catalog.csv` part of the command redirects the script's standard output, which contains the catalog data, into a file named `catalog.csv`.
 
 ## Phase picks
 
 While a csv file is easy to handle, some details cannot be stored in that format (e.g. phase picks). For this reason it is possible to specify a **destination folder**, where each **event** is stored **in [QUAKEML](https://quake.ethz.ch/quakeml/)** format along with the station inventory in the same format:
 
-<pre>
-python fdsnws-download.py 'http://myfdsnws:8080' '2023-04-19T12:00:00' '2023-04-19T12:03:00' \
-    output-catalog-dir > catalog.csv
-</pre>
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' '2023-04-19T12:00:00' '2023-04-19T12:03:00' \
+    output-catalog-dir
+```
 
-*Note*: Replace **output-catalog-dir**  with a folder name that makes sense to you. 
+*Note*: Replace `output-catalog-dir` with a descriptive folder name. This directory will store each event as a QUAKEML file and its corresponding station inventory. 
 
 ## Event Waveform data
 
- It is possible to **download the waveforms** too. The script loads the previously downloaded catalog data (csv and QUAKEML files) and then it downloads the waveforms for each event. By default it fetches the waveforms of the stations associated to the event picks and the latest pick time is used to determine the waveform length (oring time ~ latest pick time):
+ It is possible to **download event waveforms**. The script loads the previously downloaded catalog data (CSV and QUAKEML files) and then downloads waveforms for each event. By default, it fetches waveforms from stations associated with event picks, and the latest pick time determines the waveform length (origin time ~ latest pick time):
 
-<pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --event-waveforms catalog-dir catalog.csv
-</pre>
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' --event-waveforms catalog-dir catalog.csv
+```
 
-*Note*: Replace **catalog-dir** and **catalog.csv** with the folder name and the csv file downloaded previously.
+*Note*: Replace `catalog-dir` with the name of the directory containing the QUAKEML files (e.g., `output-catalog-dir` from the previous step) and `catalog.csv` with the path to the CSV catalog file downloaded earlier.
 
 Additionally it is possible to manually specify the length of the waveforms to download and the list of stations to use:
 
-<pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv \
-     [length-before-event:length-after-event] [station-filter]
-</pre>
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' --waveforms catalog-dir catalog.csv \
+    [length-before-event:length-after-event] [station-filter]
+```
 
 *Note*:
 - **length-before-event** waveform length in seconds (e.g. 3.5, 0.030) to download before the event time
@@ -61,35 +65,36 @@ Additionally it is possible to manually specify the length of the waveforms to d
 
 e.g. Download 3 seconds of waveforms before the event and 10 after and download all stations of the network CH (identical to CH.\*.\*.\*) plus the stations GT.STA01.\*.HH? and GT.STA02.\*.HH?
 
-<pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv \
-     "3:10" "CH,GR.(STA01|STA02).\*.HH?"
-</pre>
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' --waveforms catalog-dir catalog.csv \
+    "3:10" "CH,GR.(STA01|STA02).*.HH?"
+```
 
 ## Waveform data at any point in time
 
 To download waveforms at specific points in time, you can use the following syntax
 
-<pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms inventory.xml [start-time] [length] [station-filter]
-</pre>
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' --waveforms inventory.xml [start-time] [length] [station-filter]
+```
 
 *Note*:
+- **inventory.xml**: This refers to an FDSN StationXML file, which can be generated when downloading phase picks (e.g., in `output-catalog-dir`).
 - **start-time**: waveform start time to download
 - **length** waveform length in seconds
 - **stations-filter** is an optional comma separated list of station filters where each filter can be: "net", "net.sta", "net.sta.loc" or "net.sta.loc.cha" and it supports wildcards such as *,?,(,),|
 
 E.g. Download 20 seconds of data of any station at 2024-04-30T00:00:00:
 
-<pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir/inventory.xml "2024-04-30T00:00:00" 20
-</pre>
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' --waveforms catalog-dir/inventory.xml "2024-04-30T00:00:00" 20
+```
 
-Only station NN.STA1 and NN.STA
+Only station NN.STA1 and NN.STA2
 
-<pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir/inventory.xml "2024-04-30T00:00:00" 20 "NN.STA1,NN.STA2"
-</pre>
+```bash
+python fdsnws-download.py '[FDSNWS_URL]' --waveforms catalog-dir/inventory.xml "2024-04-30T00:00:00" 20 "NN.STA1,NN.STA2"
+```
 
 # Post-processing
 
@@ -102,7 +107,7 @@ from pathlib import Path
 from obspy.core import UTCDateTime
 
 csv_catalog = "catalog.csv"
-xml_folder  = "mydirectory"  # folder where the event XML files were downloaded
+xml_folder  = "output-catalog-dir"  # Folder where event QUAKEML files and inventory were downloaded
 
 #
 # Load the csv catalog
@@ -159,7 +164,7 @@ for row in cat.itertuples():
       print(f" maximum_distance {o.quality.maximum_distance}")
 
 
-  # loop trough origin arrivals
+  # Loop through origin arrivals and find associated picks
   for a in o.arrivals:
     #
     # find the pick associated with the current arrival
@@ -170,9 +175,7 @@ for row in cat.itertuples():
         print(f" Pick {p.evaluation_mode} {a.phase} @ {wfid.network_code}.{wfid.station_code}.{wfid.location_code}.{wfid.channel_code} residual {a.time_residual} distance {a.distance} deg {p.time}")
         break
 
-  #
-  # We can also load the waveforms for this event
-  #
+  # Load and plot waveforms for this event
   trace = ob.read( Path(xml_folder, f"ev{ev_id}.mseed"))
   trace.plot()
 
@@ -184,12 +187,12 @@ Similarly it is possible to load the inventory XML with obspy and use the [Inven
 import obspy as ob
 from pathlib import Path
 
-xml_folder  = "mydirectory"  # folder where the event XML files were downloaded
+xml_folder  = "output-catalog-dir"  # Folder where event QUAKEML files and inventory were downloaded
 
-### Load the previously downloaded inventory
+# Load the previously downloaded inventory
 inv = ob.core.inventory.inventory.read_inventory( Path(xml_folder, "inventory.xml") )
 
-### Print the stations active at a specific point in time
+# Print stations active at a specific point in time
 ref_time = ob.UTCDateTime("2022-10-01 12:00:00")
 
 stations = {}
@@ -208,9 +211,7 @@ for net in inv.networks:
 for (sta, info) in stations.items():
     print(f"{sta}: {info}")
 
-#
-# sometimes it might be easier to fetch the coordinates like this
-#
+# Alternatively, fetch coordinates like this
 inv.get_coordinates("NET.STA.LOC.CHA", ob.UTCDateTime("2022-10-01"))
 ```
 
