@@ -81,7 +81,7 @@ class StationNameFilter:
 
     def print(self):
         for (fullRule, reRule) in self.rules.items():
-            print(f"{fullRule} (regular expression: {reRule.pattern})")
+            print(f"{fullRule}") #f" (regular expression: {reRule.pattern})")
 
 
 #
@@ -126,7 +126,8 @@ def usage():
     print("Usage:")
     print(f" {sys.argv[0]} fdsnws start-date end-date [--timeout sec]")
     print(f" {sys.argv[0]} fdsnws start-date end-date output-catalog-dir [--timeout sec]")
-    print(f" {sys.argv[0]} fdsnws --waveforms catalog-dir catalog.csv [length-before-event:length-after-event] [station-filter] [--timeout sec]")
+    print(f" {sys.argv[0]} fdsnws --event-waveforms catalog-dir catalog.csv [length-before-event:length-after-event] [station-filter] [--timeout sec]")
+    print(f" {sys.argv[0]} fdsnws --waveforms inventory.xml start-time length [station-filter] [--timeout sec]")
     print("\nNotes:")
     print(" Dates should be given in any format supported by obspy.UTCDateTime e.g. 2023-04-19T12:00:00 (UTC)")
     print(" --timeout is optional and specify the fdsnws connection timeout in seconds. Useful to deal with large requests that require a long time to be fulfilled")
@@ -142,7 +143,7 @@ def main():
       timeout = float(sys.argv[-1])
       sys.argv = sys.argv[:-2]
 
-  if sys.argv[2] == "--waveforms" and len(sys.argv) >= 5:
+  if sys.argv[2] == "--event-waveforms" and len(sys.argv) >= 5:
     client = create_client(sys.argv[1], timeout)
     catdir = sys.argv[3]
     catfile = sys.argv[4]
@@ -161,7 +162,23 @@ def main():
       if not sta_filters.set_rules(sys.argv[6]):
           return
 
-    download_waveform(client, catdir, catfile, length_before, length_after, sta_filters)
+    download_catalog_waveform(client, catdir, catfile, length_before, length_after, sta_filters)
+
+  elif sys.argv[2] == "--waveforms" and len(sys.argv) >= 6:
+    client = create_client(sys.argv[1], timeout)
+    inv_file = sys.argv[3]
+    starttime =  UTCDateTime(sys.argv[4])
+    length = float(sys.argv[5])  # [sec]
+    sta_filters = None
+    if len(sys.argv) >= 7:
+      sta_filters = StationNameFilter()
+      if not sta_filters.set_rules(sys.argv[6]):
+          return
+
+    waveforms = download_waveform_at_time(client, inv_file, starttime, length, sta_filters)
+    if waveforms:
+      print(f"Saving data.mseed", file=sys.stderr)
+      waveforms.write('data.mseed', format="MSEED")
 
   elif len(sys.argv) == 4 or len(sys.argv) == 5:
     client = create_client(sys.argv[1], timeout)
@@ -317,7 +334,7 @@ def download_catalog(client, catdir, starttime, endtime):
         print(f"While retrieving event {ev_id} an exception occurred: {e}", file=sys.stderr)
 
 
-def download_waveform(client, catdir, catfile, length_before=None, length_after=None, sta_filters=None):
+def download_catalog_waveform(client, catdir, catfile, length_before=None, length_after=None, sta_filters=None):
 
   #
   # Load the csv catalog
@@ -423,29 +440,62 @@ def download_waveform(client, catdir, catfile, length_before=None, length_after=
     else:
       endtime = evtime + length_after
 
-    bulk = []
-    for (network_code, station_code, location_code, channel_code) in stations:
-      bulk.append( (network_code, station_code, location_code, channel_code, starttime, endtime) )
-
-    #
-    # Download the waveforms
-    #
-    waveforms = None
-    if bulk:
-      print(f"Downloading {len(bulk)} waveforms between {starttime} ~ {endtime} ", file=sys.stderr)
-      try:
-        # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.get_waveforms_bulk.html
-        # https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html
-        waveforms = client.get_waveforms_bulk(bulk)
-      except FDSNTimeoutException as e:
-        print(f"FDSNTimeoutException: Cannot fetch waveforms for event {id} (consider --timeout option)", file=sys.stderr)
-      except Exception as e:
-        print(f"Cannot fetch waveforms for event {id}: {e}", file=sys.stderr)
+    waveforms = download_waveform(client, stations, starttime, endtime)
 
     if waveforms:
-      waveforms.trim(starttime=starttime, endtime=endtime)
       print(f"Saving {wf_file}", file=sys.stderr)
       waveforms.write(wf_file, format="MSEED")
+
+
+def download_waveform_at_time(client, inv_file, starttime, length, sta_filters=None):
+
+  #
+  # Load the inventory
+  #
+  print(f"Loading inventory {inv_file}...", file=sys.stderr)
+  inv = ob.core.inventory.inventory.read_inventory(inv_file)
+
+  if sta_filters is None:
+    sta_filters = StationNameFilter()
+    sta_filters.set_rules("*")
+
+  print(f"Using the following station filters...", file=sys.stderr)
+  sta_filters.print()
+
+  #
+  # Find the stations list that were active at starttime
+  #
+  stations = get_stations(
+          inventory=inv, ref_time=starttime, sta_filters=sta_filters)
+
+  endtime = starttime + length
+
+  return download_waveform(client, stations, starttime, endtime)
+
+
+def download_waveform(client, stations, starttime, endtime):
+
+  bulk = []
+  for (network_code, station_code, location_code, channel_code) in stations:
+    bulk.append( (network_code, station_code, location_code, channel_code, starttime, endtime) )
+
+  waveforms = None
+  if bulk:
+    print(f"Downloading {len(bulk)} waveforms between {starttime} ~ {endtime} ", file=sys.stderr)
+    try:
+      # https://docs.obspy.org/packages/autogen/obspy.clients.fdsn.client.Client.get_waveforms_bulk.html
+      waveforms = client.get_waveforms_bulk(bulk)
+    except FDSNTimeoutException as e:
+      print(f"FDSNTimeoutException: Cannot fetch waveforms for event {id} (consider --timeout option)", file=sys.stderr)
+    except Exception as e:
+      print(f"Cannot fetch waveforms for event {id}: {e}", file=sys.stderr)
+
+  # https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html
+  if waveforms:
+    waveforms.trim(starttime=starttime, endtime=endtime)
+
+  return waveforms
+
 
 if __name__ == '__main__':
   main()

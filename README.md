@@ -37,12 +37,12 @@ python fdsnws-download.py 'http://myfdsnws:8080' '2023-04-19T12:00:00' '2023-04-
 
 *Note*: Replace **output-catalog-dir**  with a folder name that makes sense to you. 
 
-## Waveform data
+## Event Waveform data
 
  It is possible to **download the waveforms** too. The script loads the previously downloaded catalog data (csv and QUAKEML files) and then it downloads the waveforms for each event. By default it fetches the waveforms of the stations associated to the event picks and the latest pick time is used to determine the waveform length (oring time ~ latest pick time):
 
 <pre>
- python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir catalog.csv
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --event-waveforms catalog-dir catalog.csv
 </pre>
 
 *Note*: Replace **catalog-dir** and **catalog.csv** with the folder name and the csv file downloaded previously.
@@ -57,7 +57,7 @@ Additionally it is possible to manually specify the length of the waveforms to d
 *Note*:
 - **length-before-event** waveform length in seconds (e.g. 3.5, 0.030) to download before the event time
 - **length-after-event** waveform length in seconds (e.g. 3.5, 0.030) to download after the event time
-- **stations-filter** is a comma separated list of station filters where each filter can be: "net", "net.sta", "net.sta.loc" or "net.sta.loc.cha" and it supports wildcards such as *,?,(,),| 
+- **stations-filter** is an optional comma separated list of station filters where each filter can be: "net", "net.sta", "net.sta.loc" or "net.sta.loc.cha" and it supports wildcards such as *,?,(,),| 
 
 e.g. Download 3 seconds of waveforms before the event and 10 after and download all stations of the network CH (identical to CH.\*.\*.\*) plus the stations GT.STA01.\*.HH? and GT.STA02.\*.HH?
 
@@ -66,6 +66,30 @@ e.g. Download 3 seconds of waveforms before the event and 10 after and download 
      "3:10" "CH,GR.(STA01|STA02).\*.HH?"
 </pre>
 
+## Waveform data at any point in time
+
+To download waveforms at specific points in time, you can use the following syntax
+
+<pre>
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms inventory.xml [start-time] [length] [station-filter]
+</pre>
+
+*Note*:
+- **start-time**: waveform start time to download
+- **length** waveform length in seconds
+- **stations-filter** is an optional comma separated list of station filters where each filter can be: "net", "net.sta", "net.sta.loc" or "net.sta.loc.cha" and it supports wildcards such as *,?,(,),|
+
+E.g. Download 20 seconds of data of any station at 2024-04-30T00:00:00:
+
+<pre>
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir/inventory.xml "2024-04-30T00:00:00" 20
+</pre>
+
+Only station NN.STA1 and NN.STA
+
+<pre>
+ python fdsnws-download.py 'http://usr:pass@myfdsnws:8080' --waveforms catalog-dir/inventory.xml "2024-04-30T00:00:00" 20 "NN.STA1,NN.STA2"
+</pre>
 
 # Post-processing
 
